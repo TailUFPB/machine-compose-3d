@@ -1,0 +1,25 @@
+[project]
+name = "machine-compose-3d"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.8",
+  "pydantic-settings>=2.4",
+  "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.70", "openai>=1.40"]
+infra = ["langfuse>=3.0", "supabase>=2.6"]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+
+[tool.uv]
+package = false
