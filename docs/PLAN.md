@@ -116,3 +116,26 @@ Cada uma sai de `main` depois do MVP, com testes.
 - `ideia/caminho-upgrade`: ranking de upgrades por ganho de FPS por real sobre uma build existente.
 - `ideia/custo-energia`: consumo estimado por hora de jogo e custo mensal pela tarifa do estado.
 - `ideia/compartilhar-build`: link público só-leitura e exportação para texto/Markdown.
+
+## Estado em 10/11/2026
+
+Feito em `main` (todas as fatias 1 a 11), com 63 testes pytest e 6 vitest passando; o front foi conferido no navegador
+(fluxo do agente, cena 3D com conflitos em vermelho, FPS, demo de fluidez, plano de compra e override de exportação).
+
+Limitações conhecidas (deliberadas no MVP):
+- Busca de preço só com o provedor `seed`; o conector web entra em `precos._buscar`.
+- Link do PCPartPicker sem o texto não é baixado: o importador pede o texto exportado.
+- Persistência principal em memória; o Supabase é espelho (escrita). O front fala com a API, não usa Realtime ainda.
+- Frete por CEP fica "a confirmar", como no OrçaAI com `FRETE_ATIVO=false`.
+- Revisores de Armazenamento/lanes, Térmico e Equilíbrio ficaram fora do MVP, como pedido.
+
+## Branches de ideias
+
+| Branch | O que faz | Rotas |
+|---|---|---|
+| `ideia/alerta-preco` | preço-alvo por peça, menor preço atual com fonte, mínima histórica e tendência | `POST/GET /alertas` |
+| `ideia/caminho-upgrade` | upgrades de CPU/GPU ranqueados por % de FPS por R$ 1.000, com as trocas obrigatórias no pacote | `GET /builds/{id}/upgrades?verba=` |
+| `ideia/custo-energia` | consumo em jogo, eficiência da fonte e custo mensal pela tarifa do usuário | `GET /builds/{id}/energia?horas_dia=&tarifa=` |
+| `ideia/compartilhar-build` | Markdown que o importador lê de volta e link só-leitura por token | `GET /builds/{id}/texto`, `POST /builds/{id}/compartilhar`, `GET /compartilhado/{token}` |
+
+Cada branch sai de `main`, tem só backend + testes e pode ser revisada e mesclada sozinha.
