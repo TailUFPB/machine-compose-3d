@@ -12,7 +12,6 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import llm
 from .config import get_settings
 from .modelos import Componente
 from .store import Store
@@ -98,13 +97,10 @@ def mesmo_produto(comp: Componente, titulo: str, exigir_medidas: bool = True) ->
 
 
 def _extrair(anuncio: dict) -> float | None:
-    """Extração de preço. Com LLM, ele lê o anúncio; o valor só vale se aparecer no texto (anti-alucinação)."""
-    regex = parse_brl(anuncio["preco_texto"])
-    r = llm.completar_json("extrator_preco", "Extraia o preço à vista em reais do anúncio. JSON: {\"preco\": número}",
-                           f"Título: {anuncio['titulo']}\nTexto: {anuncio['preco_texto']}")
-    if r and isinstance(r.get("preco"), (int, float)) and regex and abs(r["preco"] - regex) < 0.01:
-        return float(r["preco"])
-    return regex
+    """Extração de preço do texto do anúncio."""
+    # ponytail: sem LLM aqui. O valor do LLM só valia se batesse com o regex, então a chamada nunca mudava o
+    # resultado e custava uma requisição por oferta. Volta quando o conector real trouxer a página inteira.
+    return parse_brl(anuncio["preco_texto"])
 
 
 def _confianca(lojas: int, dispersao: float) -> str:
