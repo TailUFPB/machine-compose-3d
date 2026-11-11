@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,7 +19,18 @@ from .tracing import trace
 
 CONFIRMACAO_OVERRIDE = "EXPORTAR MESMO ASSIM"
 
-app = FastAPI(title="machine-compose-3d", version="0.1.0")
+
+
+@asynccontextmanager
+async def _ciclo(_app: FastAPI):
+    if get_settings().preco_real:   # preço real: carrega o já coletado e busca o resto em segundo plano
+        store = get_store()
+        precos.carregar_disco(store)
+        threading.Thread(target=precos.aquecer, args=(store,), daemon=True).start()
+    yield
+
+
+app = FastAPI(title="machine-compose-3d", version="0.1.0", lifespan=_ciclo)
 app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.split(","), allow_methods=["*"], allow_headers=["*"])
 
 
@@ -54,7 +68,8 @@ def _por_no_lugar(store: Store, b: Build, novo: BuildItem) -> None:
 @app.get("/saude")
 def saude(store: Store = Depends(get_store)):
     s = get_settings()
-    return {"ok": True, "llm": s.llm_provider, "busca": s.busca_provider, "dados": store.aviso}
+    dados = store.aviso if not s.preco_real else "Preços reais do Google Shopping (serper.dev); FPS e fichas ainda do seed fictício."
+    return {"ok": True, "llm": s.llm_provider, "busca": "serper" if s.preco_real else "seed", "dados": dados}
 
 
 @app.get("/jogos")

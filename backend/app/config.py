@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     agente_max_tentativas: int = 4
 
     # Pesquisa de preço
-    busca_provider: Literal["seed"] = "seed"
+    busca_provider: Literal["seed", "serper"] = "seed"   # serper = Google Shopping via serper.dev (preço real)
+    serper_api_key: str = Field(default="", repr=False)
     preco_cache_dias: int = 7
     lojas: str = "Kabum,Pichau,Terabyte,Mercado Livre,Amazon"
 
@@ -42,6 +43,11 @@ class Settings(BaseSettings):
     langfuse_base_url: str = "https://cloud.langfuse.com"
 
     cors_origins: str = "http://localhost:3000,http://localhost:3010"
+
+    @property
+    def preco_real(self) -> bool:
+        """serper sem chave cai no seed: o .env vazio continua rodando offline."""
+        return self.busca_provider == "serper" and bool(self.serper_api_key)
 
 
 @lru_cache

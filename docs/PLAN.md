@@ -29,9 +29,11 @@ Plano em fases para a plataforma de montagem de PC. A referência é o OrçaAI
 2. **Persistência:** repositório em memória, carregado do seed JSON, é a fonte nos testes e na demo.
    Com `SUPABASE_URL` definido, as builds, os achados e o histórico de preço também são gravados no
    Supabase. O schema SQL e o seed SQL são gerados do mesmo JSON (`scripts/gerar_seed_sql.py`).
-3. **Busca de preço:** o seed traz ofertas fictícias de Kabum, Pichau, Terabyte, Mercado Livre e
-   Amazon. Elas passam pelo mesmo pipeline real (mesmo produto, outliers, faixa). O conector web
-   real fica atrás de `BUSCA_PROVIDER` (padrão `seed`).
+3. **Busca de preço:** `BUSCA_PROVIDER=seed` (padrão) usa ofertas fictícias de Kabum, Pichau, Terabyte,
+   Mercado Livre e Amazon; `serper` (com `SERPER_API_KEY`) busca no Google Shopping via serper.dev, como a
+   segunda fonte do OrçaAI. Os dois passam pelo mesmo pipeline (usado, kit/PC montado, mesmo produto,
+   outliers, faixa). Com preço real, a API pré-busca o catálogo em paralelo ao iniciar e guarda os anúncios
+   brutos em `backend/.cache/precos.json`: reiniciar não gasta crédito e regra nova recalcula sem nova busca.
 4. **Achado bloqueante:** flag `BLOQUEANTE_BLOQUEIA_EXPORTACAO=true`. Exportar com bloqueante
    aberto devolve 409, a menos que o pedido traga `override=true` e `confirmacao="EXPORTAR MESMO ASSIM"`.
 5. **Fonte obrigatória:** o seed usa a fonte `seed:demo` (dados fictícios) e assim é exibido.
@@ -123,7 +125,8 @@ Feito em `main` (todas as fatias 1 a 11), com 63 testes pytest e 6 vitest passan
 (fluxo do agente, cena 3D com conflitos em vermelho, FPS, demo de fluidez, plano de compra e override de exportação).
 
 Limitações conhecidas (deliberadas no MVP):
-- Busca de preço só com o provedor `seed`; o conector web entra em `precos._buscar`.
+- Preço real só pelo Google Shopping (serper.dev): o link costuma abrir no Google, não na loja, e várias peças têm
+  uma oferta só (confiança baixa). FPS e fichas técnicas continuam do seed.
 - Link do PCPartPicker sem o texto não é baixado: o importador pede o texto exportado.
 - Persistência principal em memória; o Supabase é espelho (escrita). O front fala com a API, não usa Realtime ainda.
 - Frete por CEP fica "a confirmar", como no OrçaAI com `FRETE_ATIVO=false`.

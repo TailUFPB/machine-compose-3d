@@ -6,7 +6,8 @@ pesquisa de preço com fonte, montagem 3D paramétrica e simulação de FPS. A a
 fonte e resultado com viabilidade. O plano completo está em [docs/PLAN.md](docs/PLAN.md).
 
 > Os dados do seed são **fictícios** (fonte `seed:demo`). Os modelos de peça existem e as fichas são aproximadas,
-> mas preços e FPS foram inventados para a demonstração.
+> mas preços e FPS foram inventados para a demonstração. Com `BUSCA_PROVIDER=serper` e `SERPER_API_KEY`, os preços
+> passam a ser reais (Google Shopping via serper.dev, link de cada oferta); FPS continua do seed.
 
 ## Regras de ouro (como o código garante)
 
