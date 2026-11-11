@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import agente, exportar, importar, precos, resultado
+from . import agente, compartilhar, exportar, importar, precos, resultado
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
@@ -282,3 +282,23 @@ def cena(build_id: str, store: Store = Depends(get_store)):
     return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs} for c in comps if c.tipo != "extra"],
             "conflitos": conflitos,
             "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos]}
+
+
+@app.get("/builds/{build_id}/texto")
+def texto_build(build_id: str, store: Store = Depends(get_store)):
+    return Response(compartilhar.markdown(store, _build(store, build_id)), media_type="text/markdown; charset=utf-8")
+
+
+@app.post("/builds/{build_id}/compartilhar")
+def compartilhar_build(build_id: str, store: Store = Depends(get_store)):
+    _build(store, build_id)
+    return {"token": compartilhar.criar_token(store, build_id)}
+
+
+@app.get("/compartilhado/{token}", response_model=Build)
+def ver_compartilhado(token: str, store: Store = Depends(get_store)):
+    """Só leitura: não existe rota de escrita por token."""
+    build_id = compartilhar.resolver(store, token)
+    if not build_id:
+        raise HTTPException(404, "link inválido")
+    return _build(store, build_id)
