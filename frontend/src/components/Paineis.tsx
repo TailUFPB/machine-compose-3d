@@ -223,10 +223,10 @@ export function Jogos({ build, builds }: { build: Build; builds: Build[] }) {
                     <td className={f.fps_med >= build.objetivos.fps_alvo ? "ok" : "erro"}><strong>{Math.round(f.fps_med)}</strong></td>
                     <td>{Math.round(f.fps_min)}–{Math.round(f.fps_max)}</td>
                     <td>{Math.round(f.fps_1low)}</td>
-                    <td>{f.gargalo?.toUpperCase() ?? "—"}</td>
+                    <td>{f.gargalo?.toUpperCase() ?? "-"}</td>
                     <td><span className="selo" title={`Fonte: ${f.fontes.join(", ")}`}>{f.tipo}</span></td>
                     <td>{f.confianca}</td>
-                    <td>{f.fps_por_mil_reais ?? "—"}</td>
+                    <td>{f.fps_por_mil_reais ?? "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -265,8 +265,8 @@ export function Jogos({ build, builds }: { build: Build; builds: Build[] }) {
                   return (
                     <tr key={x.jogo}>
                       <td>{x.jogo_nome}</td><td>{Math.round(x.fps_med)} <span className="suave">({x.tipo})</span></td>
-                      <td>{y ? <>{Math.round(y.fps_med)} <span className="suave">({y.tipo})</span></> : "—"}</td>
-                      <td>{y ? `${((y.fps_med / x.fps_med - 1) * 100).toFixed(0)}%` : "—"}</td>
+                      <td>{y ? <>{Math.round(y.fps_med)} <span className="suave">({y.tipo})</span></> : "-"}</td>
+                      <td>{y ? `${((y.fps_med / x.fps_med - 1) * 100).toFixed(0)}%` : "-"}</td>
                     </tr>
                   );
                 })}
@@ -363,7 +363,7 @@ export function ResultadoPainel({ build, onBuild }: { build: Build; onBuild: Atu
                 <tr key={p.componente_id}>
                   <td>{p.componente_id}{p.do_cache && <div className="suave">cache{p.vencido && " vencido"}</div>}</td>
                   <td>{p.ofertas.map((o) => <div key={o.url + o.loja}><a href={o.url} target="_blank" rel="noreferrer">{o.loja}</a> {brl(o.preco)}</div>)}</td>
-                  <td>{brl(p.preco_min)} – {brl(p.preco_max)}<div className="suave">confiança {p.confianca ?? "—"}</div></td>
+                  <td>{brl(p.preco_min)} – {brl(p.preco_max)}<div className="suave">confiança {p.confianca ?? "-"}</div></td>
                   <td className="suave">{p.descartes.map((d, i) => <div key={i}>{d.loja}: {d.motivo}</div>)}</td>
                   <td><Sparkline pontos={mediaPorDia(p.historico)} /></td>
                 </tr>
@@ -401,7 +401,7 @@ function mediaPorDia(h: { preco: number; coletado_em: string }[]): number[] {
 }
 
 function Sparkline({ pontos }: { pontos: number[] }) {
-  if (pontos.length < 2) return <span className="suave">—</span>;
+  if (pontos.length < 2) return <span className="suave">-</span>;
   const min = Math.min(...pontos), max = Math.max(...pontos), w = 100, h = 24;
   const d = pontos.map((p, i) => `${(i / (pontos.length - 1)) * w},${h - ((p - min) / (max - min || 1)) * h}`).join(" ");
   return (
