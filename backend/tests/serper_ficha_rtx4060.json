@@ -1,0 +1,23 @@
+{
+ "searchParameters": {"q": "NVIDIA GeForce RTX 4060 8GB especificações", "gl": "br", "hl": "pt-br", "type": "search"},
+ "organic": [
+  {
+   "title": "Placa de Vídeo RTX 4060 8GB - KaBuM!",
+   "link": "https://www.kabum.com.br/produto/475647/placa-de-video-rtx-4060",
+   "snippet": "Placa de vídeo RTX 4060 8GB GDDR6 com 2 ventoinhas. Compre em até 10x sem juros.",
+   "position": 1
+  },
+  {
+   "title": "GeForce RTX 4060 e RTX 4060 Ti | NVIDIA",
+   "link": "https://www.nvidia.com/pt-br/geforce/graphics-cards/40-series/rtx-4060-4060ti/",
+   "snippet": "Especificações: 8 GB GDDR6. Saídas de vídeo: HDMI, 3x DisplayPort. Comprimento 244 mm, 2 slots. Conector de energia: 1x PCIe de 8 pinos.",
+   "position": 2
+  },
+  {
+   "title": "RTX 4060 vale a pena? Review completo",
+   "link": "https://www.exemplo-de-review.com.br/rtx-4060",
+   "snippet": "Testamos a RTX 4060 em 12 jogos. Veja consumo, temperatura e ruído das duas ventoinhas de 90 mm.",
+   "position": 3
+  }
+ ]
+}

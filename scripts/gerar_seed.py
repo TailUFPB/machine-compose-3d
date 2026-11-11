@@ -144,6 +144,63 @@ ext("ext-fan-3pack", "Kit 3 ventoinhas 120mm", 120, "ventoinhas")
 ext("ext-win11", "Windows 11 Home (licença digital)", 600, "so")
 ext("ext-wifi", "Adaptador Wi-Fi 6 PCIe", 150, "wifi")
 
+# --- Ficha geométrica para a cena 3D (campos opcionais). Lacunas de propósito: campo ausente cai na estimativa.
+D, H = "DisplayPort", "HDMI"
+A, C = "USB-A", "USB-C"
+PORTAS_BASICA = ["PS/2", A, A, H, D, A, A, "RJ45", "audio"]
+PORTAS_MEDIA = [A, A, A, A, H, D, C, A, A, "RJ45", "audio"]
+PORTAS_TOPO = [A, A, A, A, A, A, C, C, H, D, "RJ45", "audio"]
+fan = lambda frente, topo, traseira: {"frente": frente, "topo": topo, "traseira": traseira}
+baias = lambda b25, b35: {"2.5": b25, "3.5": b35}
+FICHA = {
+    "rtx-3050-6g": dict(fans=2, fan_mm=80, backplate=False, saidas=[D, H, H]),
+    "rtx-3060-12g": dict(fans=2, fan_mm=90, backplate=True, saidas=[D, D, D, H]),
+    "rtx-4060-8g": dict(fans=2, fan_mm=90, backplate=True, saidas=[D, D, D, H]),
+    "rtx-4060ti-8g": dict(fans=2, fan_mm=90, backplate=True, saidas=[D, D, D, H]),
+    "rtx-4060ti-16g": dict(fans=2, fan_mm=90, backplate=True),
+    "rtx-4070": dict(fans=2, fan_mm=100, backplate=True, saidas=[D, D, D, H]),
+    "rtx-4070s": dict(fans=2, fan_mm=100, backplate=True, saidas=[D, D, D, H]),
+    "rtx-4070tis": dict(fans=3, fan_mm=90, backplate=True, saidas=[D, D, D, H]),
+    "rtx-4080s": dict(fans=3, fan_mm=100, backplate=True, saidas=[D, D, D, H]),
+    "rtx-5060-8g": dict(fans=2, saidas=[D, D, D, H]),
+    "rtx-5060ti-16g": dict(fans=2, fan_mm=90, backplate=True, saidas=[D, D, D, H]),
+    "rtx-5070": dict(fans=2, fan_mm=100, backplate=True, saidas=[D, D, D, H]),
+    "rtx-5070ti": dict(fans=3, fan_mm=95, backplate=True, saidas=[D, D, D, H]),
+    "rx-6600": dict(fans=2, fan_mm=80, backplate=False, saidas=[D, D, D, H]),
+    "rx-7600": dict(fans=2, fan_mm=85, backplate=True, saidas=[D, D, D, H]),
+    "rx-7700xt": dict(fans=2, fan_mm=100, backplate=True, saidas=[D, D, H, H]),
+    # rx-7800xt: sem nenhum campo (peça inteira estimada)
+    "rx-9070": dict(fans=3, fan_mm=90, backplate=True, saidas=[D, D, D, H]),
+    "rx-9070xt": dict(fans=3, fan_mm=100, backplate=True, saidas=[D, D, H, H]),
+    "arc-b580": dict(fans=2, backplate=True, saidas=[D, D, D, H]),
+    "clr-ak400": dict(fans=1, fan_mm=120, heatpipes=4),
+    "clr-pa120se": dict(fans=2, fan_mm=120, heatpipes=6),
+    "clr-nhd15": dict(fans=2, fan_mm=140),
+    "clr-kraken-240": dict(fans=2, fan_mm=120, radiador_posicao="topo"),
+    "clr-lf3-360": dict(fans=3, fan_mm=120),
+    "mb-a620m-hdv": dict(portas_traseiras=PORTAS_BASICA, m2_dissipador=False),
+    "mb-b650m-a": dict(portas_traseiras=PORTAS_BASICA, m2_dissipador=False),
+    "mb-b650-gx-ax": dict(portas_traseiras=PORTAS_MEDIA, m2_dissipador=True),
+    "mb-b850-tomahawk": dict(portas_traseiras=PORTAS_TOPO, m2_dissipador=True),
+    "mb-b650i-strix": dict(portas_traseiras=PORTAS_TOPO, m2_dissipador=True),
+    "mb-b550m-vdh": dict(m2_dissipador=False),
+    "mb-b550-aorus": dict(portas_traseiras=PORTAS_MEDIA, m2_dissipador=True),
+    "mb-b760m-d4": dict(portas_traseiras=PORTAS_BASICA, m2_dissipador=True),
+    "mb-b760-tuf-d5": dict(portas_traseiras=PORTAS_MEDIA, m2_dissipador=True),
+    "mb-z790-ud": dict(portas_traseiras=PORTAS_MEDIA),
+    "case-lancool-216": dict(posicoes_fan=fan(3, 3, 1), lateral="vidro", baias=baias(2, 2)),
+    "case-h5-flow": dict(posicoes_fan=fan(3, 2, 1), lateral="vidro", baias=baias(2, 1)),
+    "case-air903": dict(posicoes_fan=fan(3, 3, 1), lateral="vidro"),
+    "case-q300l": dict(posicoes_fan=fan(2, 2, 1), baias=baias(2, 1)),
+    "case-nr200p": dict(lateral="chapa", baias=baias(3, 1)),
+    "ssd-nv3-1t": dict(formato="M.2"),
+    "ssd-sn770-1t": dict(formato="M.2"),
+    "ssd-mx500-1t": dict(formato="2.5"),
+}
+for c in componentes:
+    c["specs"].update(FICHA.pop(c["id"], {}))
+assert not FICHA, f"ficha de peça que não existe: {sorted(FICHA)}"
+
 # --- Jogos: FPS de referência (GPU índice 100, preset Alto) por resolução e teto de CPU (índice 100)
 JOGOS = [
     {"id": "cyberpunk-2077", "nome": "Cyberpunk 2077", "gpu_ref": {"1080p": 118, "1440p": 82}, "cpu_ref": 165, "low": 0.74},

@@ -37,12 +37,14 @@ Sem `.env`, tudo roda offline: agentes e extração usam o caminho determinísti
 ```bash
 cd backend && uv run pytest        # regras, revisores, consolidador, preço, FPS, agente, importação, API
 cd frontend && pnpm test           # layout 3D, tutorial, demo de fluidez, formatação
+cd frontend && pnpm e2e            # cena 3D no navegador (Playwright): interação, conflitos e taxa de quadros
 ```
 
 ## Supabase
 
 ```bash
 psql "$DATABASE_URL" -f supabase/migrations/001_schema.sql
+psql "$DATABASE_URL" -f supabase/migrations/002_specs_origem.sql
 python3 scripts/gerar_seed.py && python3 scripts/gerar_seed_sql.py   # regenera seed.json e seed.sql
 psql "$DATABASE_URL" -f supabase/seed.sql
 ```
@@ -65,3 +67,11 @@ psql "$DATABASE_URL" -f supabase/seed.sql
   gargalo, 1% low, confiança e FPS por R$ 1.000.
 - **3D:** caixas dimensionadas pela ficha (`frontend/src/lib/cena.ts`), com peça em conflito pulsando em vermelho e
   tutorial passo a passo.
+
+## Cena 3D
+
+As peças são modelos procedurais gerados da ficha técnica; o método está em [docs/PECAS-3D.md](docs/PECAS-3D.md) e a
+spec em [docs/SPEC-VISTA-3D-COMPLETA.md](docs/SPEC-VISTA-3D-COMPLETA.md). Cada medida tem origem: norma, ficha ou
+estimado. `POST /componentes/{id}/ficha` busca a página do fabricante e extrai os campos geométricos da ficha (fans,
+portas, baias), cada um com URL e dentro de uma faixa plausível; sem `SERPER_API_KEY` ou sem LLM, não roda e o seed
+é usado como está. O que a extração grava fica em memória e se perde ao reiniciar a API.
