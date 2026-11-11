@@ -15,6 +15,7 @@ from .modelos import BuildItem
 from .precos import _tokens, mesmo_produto
 from .store import Store
 
+MIN_COBERTURA = 0.6   # fração das palavras do modelo que precisa estar na linha ("750W" sozinho não basta)
 LINK_PCPP = re.compile(r"https?://(\w+\.)?pcpartpicker\.com/(list|user)/\S+", re.I)
 
 
@@ -54,7 +55,13 @@ def importar(store: Store, texto: str, ja_tenho: bool = False) -> ResultadoImpor
         if not candidatos:
             r.nao_reconhecidas.append(bruta.strip())
             continue
-        melhor = max(candidatos, key=lambda c: len(_tokens(c.modelo)))   # o mais específico
+        visto = set(_tokens(linha))
+        cobertura = lambda c: len(set(_tokens(c.modelo)) & visto) / len(set(_tokens(c.modelo)))
+        candidatos = [c for c in candidatos if cobertura(c) >= MIN_COBERTURA]
+        if not candidatos:
+            r.nao_reconhecidas.append(bruta.strip())
+            continue
+        melhor = max(candidatos, key=lambda c: (cobertura(c), len(_tokens(c.modelo))))   # o mais coberto e específico
         if melhor.id in vistos:
             vistos[melhor.id].quantidade += qtd
         else:

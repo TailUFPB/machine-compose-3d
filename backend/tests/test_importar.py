@@ -21,3 +21,9 @@ def test_link_pcpartpicker_pede_texto(store):
 def test_upgrade_marca_ja_tenho(store):
     r = importar(store, "Ryzen 5 5600", ja_tenho=True)
     assert r.itens[0].ja_tenho and r.itens[0].travado
+
+
+def test_potencia_sozinha_nao_casa_fonte_errada(store):
+    r = importar(store, "Fonte: MSI MAG A750GL PCIE5 750W")
+    assert [i.componente_id for i in r.itens] == ["psu-a750gl"]
+    assert importar(store, "Fonte qualquer 750W").nao_reconhecidas
