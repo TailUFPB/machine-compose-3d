@@ -206,7 +206,11 @@ def precos_build(build_id: str, store: Store = Depends(get_store)):
 def fps_build(build_id: str, resolucao: str | None = None, store: Store = Depends(get_store)):
     b = _build(store, build_id)
     total = agente.custo(store, b.itens) or None
-    return estimar_build(store, [i.componente_id for i in b.itens], b.objetivos.jogos, resolucao or b.objetivos.resolucao, total)
+    es = estimar_build(store, [i.componente_id for i in b.itens], b.objetivos.jogos, resolucao or b.objetivos.resolucao, total)
+    store.espelhar("estimativas", [{"build_id": b.id, "jogo": e.jogo, "resolucao": e.resolucao, "preset": e.preset,
+                                    "fps_min": e.fps_min, "fps_med": e.fps_med, "fps_max": e.fps_max,
+                                    "confianca": e.confianca, "tipo": e.tipo} for e in es], substituir=("build_id", b.id))
+    return es
 
 
 @app.get("/comparar")

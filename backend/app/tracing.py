@@ -9,6 +9,7 @@ from .config import get_settings
 
 logger = logging.getLogger(__name__)
 _cliente = None
+AGENTES = ("revisor_", "propositor", "extrator_", "justificativas")   # viram observações do tipo agente
 
 
 def _langfuse():
@@ -19,7 +20,7 @@ def _langfuse():
     if _cliente is None:
         try:
             from langfuse import Langfuse
-            _cliente = Langfuse(public_key=s.langfuse_public_key, secret_key=s.langfuse_secret_key, host=s.langfuse_base_url)
+            _cliente = Langfuse(public_key=s.langfuse_public_key, secret_key=s.langfuse_secret_key, base_url=s.langfuse_base_url)
         except Exception as exc:
             logger.warning("Langfuse indisponível: %s", exc)
             _cliente = False
@@ -32,7 +33,7 @@ def span(nome: str, **atributos):
     ctx = nullcontext()
     if lf:
         try:
-            ctx = lf.start_as_current_span(name=nome, **atributos)
+            ctx = lf.start_as_current_observation(name=nome, as_type="agent" if nome.startswith(AGENTES) else "span", **atributos)
         except Exception as exc:
             logger.warning("Langfuse span falhou: %s", exc)
     with ctx as s:

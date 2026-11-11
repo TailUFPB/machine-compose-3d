@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync && uv run pytest -q
+      - run: uv sync --all-extras && uv run pytest -q
   frontend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: frontend } }
