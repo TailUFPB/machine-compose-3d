@@ -16,11 +16,11 @@ export default function Fluidez({ fps, low, rotulo }: { fps: number; low: number
       if (q !== ultimo) {
         ultimo = q;
         const t = (q / fps) % 2;                       // posição no instante do quadro, ida e volta em 2 s
-        const x = 20 + (cv.width - 40) * (t < 1 ? t : 2 - t);
+        const x = 32 + (cv.width - 64) * (t < 1 ? t : 2 - t);
         ctx.clearRect(0, 0, cv.width, cv.height);
-        ctx.fillStyle = "#6b93f0";
+        ctx.fillStyle = "#66c0f4";
         ctx.beginPath();
-        ctx.arc(x, cv.height / 2, 14, 0, Math.PI * 2);
+        ctx.arc(x, cv.height / 2, 24, 0, Math.PI * 2);
         ctx.fill();
       }
       raf = requestAnimationFrame(desenhar);
@@ -29,10 +29,9 @@ export default function Fluidez({ fps, low, rotulo }: { fps: number; low: number
     return () => cancelAnimationFrame(raf);
   }, [fps, low]);
   return (
-    <figure style={{ margin: 0 }}>
-      <canvas ref={ref} width={420} height={60} style={{ width: "100%", background: "#0e1117", borderRadius: 8 }}
-        aria-label={`Demonstração de fluidez a ${Math.round(fps)} FPS`} />
-      <figcaption className="suave">{rotulo}: {Math.round(fps)} FPS médio, 1% low {Math.round(low)} (limitado pela taxa do seu monitor)</figcaption>
+    <figure className="fluidez" style={{ margin: 0 }}>
+      <canvas ref={ref} width={840} height={128} aria-label={`Demonstração de fluidez a ${Math.round(fps)} FPS`} />
+      <figcaption><span className="num" style={{ color: "var(--text)" }}>{rotulo}: {Math.round(fps)} FPS</span>, 1% low {Math.round(low)}. Limitado pela taxa do seu monitor.</figcaption>
     </figure>
   );
 }

@@ -26,10 +26,10 @@ function Peca({ c, passo, inicio, onHover }: { c: Caixa; passo: number | null; i
       onPointerOver={(e) => { if (!gab) { e.stopPropagation(); onHover(c.nome); } }} onPointerOut={() => onHover(null)}>
       <boxGeometry args={c.tam.map((v) => v * ESCALA) as [number, number, number]} />
       <meshStandardMaterial
-        color={c.conflito ? "#e53e3e" : c.cor} emissive={c.conflito ? "#ff0000" : "#000000"}
-        transparent={gab} opacity={gab ? 0.12 : 1} depthWrite={!gab} metalness={0.2} roughness={0.6}
+        color={c.conflito ? "#ff6b5e" : c.cor} emissive={c.conflito ? "#ff2a1a" : "#000000"}
+        transparent={gab} opacity={gab ? 0.1 : 1} depthWrite={!gab} metalness={0.2} roughness={0.6}
       />
-      {gab && <Edges color="#aab4c8" />}
+      {gab && <Edges color="#8f98a0" />}
     </mesh>
   );
 }
@@ -50,30 +50,30 @@ export default function Cena3D({ cena }: { cena: Cena }) {
 
   useEffect(() => setInicio(tempo.current), [passo, tutorial]);
 
-  if (!caixas.length) return <p className="suave">Adicione peças para ver a montagem em 3D.</p>;
+  if (!caixas.length) return <p className="vazio-bloco">Adicione peças para ver a montagem em 3D.</p>;
   return (
     <div>
-      <div className="linha entre" style={{ marginBottom: 8 }}>
-        <div className="linha">
-          <button onClick={() => { setTutorial(!tutorial); setPasso(0); }} aria-pressed={tutorial}>
-            {tutorial ? "Ver montada" : "Modo tutorial"}
+      <div className="card-topo">
+        <div className="acoes">
+          <button className="btn" onClick={() => { setTutorial(!tutorial); setPasso(0); }} aria-pressed={tutorial}>
+            {tutorial ? "Ver montada" : "Passo a passo"}
           </button>
           {tutorial && (
             <>
-              <button onClick={() => setPasso(Math.max(0, passo - 1))} disabled={passo === 0}>Anterior</button>
-              <button onClick={() => setPasso(Math.min(total - 1, passo + 1))} disabled={passo >= total - 1}>Próximo</button>
+              <button className="btn" onClick={() => setPasso(Math.max(0, passo - 1))} disabled={passo === 0}>Anterior</button>
+              <button className="btn" onClick={() => setPasso(Math.min(total - 1, passo + 1))} disabled={passo >= total - 1}>Próximo</button>
             </>
           )}
         </div>
-        {cena.conflitos.length > 0 && <span className="selo sev-bloqueante">{cena.conflitos.length} conflito(s) em vermelho</span>}
+        {cena.conflitos.length > 0 && <span className="pill neg">{cena.conflitos.length} {cena.conflitos.length === 1 ? "conflito" : "conflitos"} em vermelho</span>}
       </div>
       {tutorial && total > 0 && (
-        <p><strong>Passo {passo + 1}/{total}:</strong> {cena.passos[passo].texto}</p>
+        <p className="passo"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo].texto}</p>
       )}
-      <div className="cena" role="img" aria-label="Montagem 3D da build" style={{ position: "relative" }}>
-        {hover && <span style={{ position: "absolute", top: 8, left: 8, zIndex: 1, background: "rgba(0,0,0,.7)", color: "#fff", padding: "2px 8px", borderRadius: 4, fontSize: 13 }}>{hover}</span>}
+      <div className="cena" role="img" aria-label="Montagem 3D da build">
+        {hover && <span className="etiqueta">{hover}</span>}
         <Canvas camera={{ position: [4.2, 2.6, 4.6], fov: 45 }}>
-          <ambientLight intensity={0.6} />
+          <ambientLight intensity={0.9} />
           <directionalLight position={[5, 8, 5]} intensity={1.2} />
           <Relogio onTempo={(t) => (tempo.current = t)} />
           {caixas.map((c) => (
@@ -82,15 +82,15 @@ export default function Cena3D({ cena }: { cena: Cena }) {
           <OrbitControls makeDefault />
         </Canvas>
       </div>
-      <ul className="linha suave" style={{ listStyle: "none", padding: 0 }} aria-label="Legenda">
+      <ul className="legenda" aria-label="Legenda">
         {caixas.filter((c) => c.tipo !== "gabinete").map((c) => (
-          <li key={c.id} className="linha"><span style={{ width: 10, height: 10, borderRadius: 2, background: c.conflito ? "#e53e3e" : c.cor, display: "inline-block" }} />{c.nome}</li>
+          <li key={c.id}><i style={{ background: c.conflito ? "#ff6b5e" : c.cor }} />{c.nome}</li>
         ))}
       </ul>
       {cena.conflitos.length > 0 && (
-        <ul className="suave">
-          {cena.conflitos.map((c) => <li key={c.id} className={`sev-${c.severidade}`}>{c.descricao}</li>)}
-        </ul>
+        <div style={{ marginTop: 16 }}>
+          {cena.conflitos.map((c) => <p key={c.id} className="achado"><span><span className="pill neg">Conflito</span> {c.descricao}</span></p>)}
+        </div>
       )}
     </div>
   );

@@ -7,8 +7,8 @@ export interface Caixa { id: string; tipo: Tipo; nome: string; pos: Vec3; tam: V
 
 const MARGEM = 30;
 const COR: Partial<Record<Tipo, string>> = {
-  gabinete: "#8892a6", placa_mae: "#2f6b4f", cpu: "#c9ccd1", cooler: "#5b7fbf", memoria: "#3a3f4b",
-  gpu: "#202634", fonte: "#4a4f5c", armazenamento: "#1f8a70",
+  gabinete: "#8892a6", placa_mae: "#3f8a63", cpu: "#c9ccd1", cooler: "#5b7fbf", memoria: "#a3afc2",
+  gpu: "#7d8aa0", fonte: "#8e98aa", armazenamento: "#1f8a70",
 };
 const MB_DIM: Record<string, [number, number]> = { ATX: [244, 305], mATX: [244, 244], ITX: [170, 170] };
 

@@ -22,3 +22,16 @@ export function quadroEm(tMs: number, fps: number, low: number): number {
   const dentro = resto + eps < lento ? 0 : 1 + Math.floor((resto - lento) / normal + eps);
   return blocos * 100 + Math.min(99, dentro);
 }
+
+/** Valor redondo para orçamentos e rótulos ("R$ 7.000"). */
+export const brlRedondo = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+/** Nome legível de uma build, no lugar do id: "R$ 7.000 · 1080p a 90 FPS". */
+export const rotuloBuild = (b: { orcamento: number; objetivos: { resolucao: string; fps_alvo: number } }) =>
+  `${brlRedondo(b.orcamento)} · ${b.objetivos.resolucao} a ${b.objetivos.fps_alvo} FPS`;
+
+export const MODOS = {
+  agente: { nome: "Agente", texto: "O agente escolhe todas as peças." },
+  hibrido: { nome: "Híbrido", texto: "Você trava algumas peças, o agente completa." },
+  manual: { nome: "Manual", texto: "Você escolhe peça por peça; o agente só sugere." },
+} as const;
