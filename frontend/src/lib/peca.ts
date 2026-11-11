@@ -12,13 +12,19 @@ export type Forma =
   | { tipo: "fan"; raio: number; pas: number; eixo?: "x" | "y" }       // gira; eixo y por padrão
   | { tipo: "aletas"; n: number; passo: number; esp: number; eixo?: "x" | "z" }   // placas finas empilhadas (em x por padrão)
   | { tipo: "grade"; n: Vec3; cheio?: number }                        // pinos, contatos e trilhas: n células por eixo, cada uma preenchida em `cheio`
-  | { tipo: "placa"; furos: { x: number; z: number; r: number }[] };  // chapa no plano xz com furos redondos
+  | { tipo: "placa"; furos: { x: number; z: number; r: number }[] }   // chapa no plano xz com furos redondos
+  // polígono extrudado ao longo de `eixo` pelo `tam` nesse eixo, centrado. Pontos em mm, relativos ao centro da subpeça,
+  // em ordem cíclica: eixo x → [y, z]; eixo y → [z, x]; eixo z → [x, y]
+  | { tipo: "perfil"; pontos: [number, number][]; eixo: "x" | "y" | "z" }
+  | { tipo: "curva"; pontos: Vec3[]; raio: number };                  // tubo pelos pontos (relativos ao centro); `tam` é só o envelope
 
 export interface Sub {
   id: string; nome: string; forma: Forma; tom: Tom; fonte: Fonte;
   pos: Vec3; tam: Vec3;   // centro e envelope, em mm
   explode: Vec3;          // deslocamento na vista explodida, em mm
   ordem: number;          // escalonamento da explosão (0 sai primeiro)
+  /** Subpeça de encaixe (trava, alavanca, parafuso): deslocamento (mm) e rotação (rad, em torno do centro) quando ABERTA. */
+  movel?: { desloca?: Vec3; gira?: Vec3 };
 }
 
 /** `ancoras`: pontos de encaixe no referencial local; duas peças se encaixam fazendo as âncoras coincidirem. */
@@ -29,6 +35,24 @@ type Add = (id: string, nome: string, tom: Tom, pos: Vec3, tam: Vec3, explode: V
 export const montador = (partes: Sub[]): Add => (id, nome, tom, pos, tam, explode, ordem, fonte = "estimado", forma = { tipo: "caixa" }) => {
   partes.push({ id, nome, forma, tom, fonte, pos, tam, explode, ordem });
 };
+
+/** Subpeças que o renderizador desenha como uma malha só. `pos` é a origem do grupo (zero nos lotes fundidos). */
+export interface Lote { subs: Sub[]; pos: Vec3; explode: Vec3; ordem: number; movel?: Sub["movel"] }
+/** Funde o que anda junto na explosão e tem o mesmo tom; fans (giram) e subpeças móveis ficam sozinhos. */
+export function lotes(partes: Sub[]): Lote[] {
+  const por = new Map<string, Lote>(), saida: Lote[] = [];
+  for (const s of partes) {
+    const solto = s.forma.tipo === "fan" || s.movel != null, chave = `${s.explode}|${s.ordem}|${s.tom}`;
+    let l = solto ? undefined : por.get(chave);
+    if (!l) {
+      l = { subs: [], pos: solto ? s.pos : [0, 0, 0], explode: s.explode, ordem: s.ordem, movel: s.movel };
+      saida.push(l);
+      if (!solto) por.set(chave, l);
+    }
+    l.subs.push(s);
+  }
+  return saida;
+}
 
 /** Progresso 0..1 de cada subpeça na explosão: escalonado por `ordem`, invertido ao fechar. */
 export function progressoExplosao(ordem: number, max: number, t: number, abrindo: boolean, atraso = 0.07, dur = 0.55): number {

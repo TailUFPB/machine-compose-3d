@@ -11,6 +11,9 @@ const CONECTOR: Record<string, { w: number; nome: string }> = {
   "12V-2x6": { w: 19, nome: "Conector 12V-2x6" },
   "12VHPWR": { w: 19, nome: "Conector 12VHPWR" },
 };
+// Saídas de vídeo: [largura ao longo do bracket (z), altura (y)] do recorte, em mm
+const SAIDA: Record<string, [number, number]> = { DisplayPort: [16.1, 4.8], HDMI: [15, 5.5], DVI: [37, 8], "USB-C": [8.4, 2.6] };
+const SLOT = 20.32, ABA = 11.43;   // passo de slot e aba superior do bracket (norma PCIe)
 const CAIXA: Forma = { tipo: "caixa" };
 
 export function gpuModelo(specs: Record<string, any>): Modelo {
@@ -40,17 +43,38 @@ export function gpuModelo(specs: Record<string, any>): Modelo {
   const finY: [number, number] = [-T / 2 + fanT + 1, pcbBaixo - VAO];
   const finH = finY[1] - finY[0], finYc = (finY[0] + finY[1]) / 2;
 
-  // Bracket: chapa, recortes das saídas (slot de cima) e grade de ventilação (slots de baixo)
+  // Bracket: chapa, recortes das saídas (uma fileira por slot, a partir do de cima) e grade de ventilação no que sobra
   add("bracket", "Bracket", "metal", [xr - 0.75, 0, 0], [1.5, T, H], E_BR, 2, "norma");
-  const portaY = pcbBaixo - 3.2;
-  const portas: [string, string][] = [["dp1", "DisplayPort"], ["dp2", "DisplayPort"], ["dp3", "DisplayPort"], ["hdmi", "HDMI"]];
-  portas.forEach(([id, nome], i) => {
-    const z = -H / 2 + 18 + i * 20;
-    add(`recorte-${id}`, nome, "escuro", [xr + 0.1, portaY, z], [0.2, 5.4, 15], E_BR, 2, "estimado");
-    add(`porta-${id}`, `Saída ${nome}`, "metal", [xr - 6.6, portaY, z], [10, 6, 16], E_PCB, 1, "estimado");
+  const saidas: string[] = specs.saidas ?? ["DisplayPort", "DisplayPort", "DisplayPort", "HDMI"];
+  const fSaida: Fonte = specs.saidas ? "ficha" : "estimado";
+  const recortes: Sub[] = [];
+  let fileira = 0, zs = -H / 2 + 10;
+  saidas.forEach((tipo, i) => {
+    const [w, h] = SAIDA[tipo] ?? [15, 5.4];
+    if (zs + w > H / 2 - 8) { fileira++; zs = -H / 2 + 10; }
+    const y = pcbBaixo - 0.2 - fileira * SLOT - (h + 0.6) / 2;
+    if (y - h / 2 < -T / 2 + 5) return;   // ponytail: no máximo as fileiras que cabem na espessura; o resto não é desenhado
+    add(`recorte-${i}`, tipo, "escuro", [xr + 0.1, y, zs + w / 2], [0.2, h, w], E_BR, 2, fSaida);
+    recortes.push(partes.at(-1)!);
+    add(`porta-${i}`, `Saída ${tipo}`, "metal", [xr - 6.6, y, zs + w / 2], [10, h + 0.6, w + 1], E_PCB, 1, fSaida);
+    zs += w + 3;
   });
-  for (let j = 0, yv = portaY - 9; yv - 2 > -T / 2 + 3; j++, yv -= 5.5)
-    for (let i = 0; i < 6; i++) add(`vent-${j}-${i}`, "Ventilação", "escuro", [xr + 0.1, yv, -H / 2 + 18 + i * 14], [0.2, 2.6, 10], E_BR, 2, "estimado");
+  for (let j = 0, yv = pcbBaixo - 12.2; yv - 2 > -T / 2 + 3; j++, yv -= 5.5)
+    for (let i = 0; i < 6; i++) {
+      const z = -H / 2 + 18 + i * 14;
+      if (recortes.some((r) => Math.abs(r.pos[1] - yv) < r.tam[1] / 2 + 2.3 && Math.abs(r.pos[2] - z) < r.tam[2] / 2 + 6)) continue;
+      add(`vent-${j}-${i}`, "Ventilação", "escuro", [xr + 0.1, yv, z], [0.2, 2.6, 10], E_BR, 2, "estimado");
+    }
+  // Aba superior: a dobra que apoia no gabinete, com um entalhe e um parafuso por slot. Na placa real ela dobra para
+  // fora (+x), além do comprimento da ficha; aqui dobra para dentro, para a peça caber no envelope.
+  const xa = xr - 1.5 - ABA / 2;
+  add("bracket-aba", "Aba do bracket (apoia no gabinete)", "metal", [xa, 0, H / 2 - 0.5], [ABA, T, 1], E_BR, 2, "norma");
+  for (let i = 0; i < Math.max(1, Math.round(T / SLOT)); i++) {
+    const y = T / 2 - SLOT / 2 - i * SLOT;
+    add(`bracket-entalhe-${i}`, "Entalhe do parafuso", "escuro", [xa - ABA / 2 + 2.5, y, H / 2 + 0.1], [5, 4.4, 0.2], E_BR, 2, "norma");
+    add(`bracket-parafuso-${i}`, "Parafuso do bracket", "metal", [xa + 2.4, y, H / 2 + 0.2], [6, 6, 0.4], E_BR, 2, "estimado", { tipo: "cilindro", raio: 3, eixo: "z" });
+    partes.at(-1)!.movel = { desloca: [0, 0, 14] };   // sai para cima ao soltar a placa
+  }
 
   // Backplate e PCB
   if (temBackplate) add("backplate", "Backplate", "mid", [cx, T / 2 - 1, 2], [cl - 4, 2, H - 12], E_BP, 0, specs.backplate == null ? "estimado" : "ficha");
@@ -104,24 +128,31 @@ export function gpuModelo(specs: Record<string, any>): Modelo {
   add("base", "Base de contato", "cobre", [gx, pcbBaixo - 1.8 - (VAO - 1.8) / 2, gz], [38, VAO - 1.8, 38], [0, 0, 0], 3, "estimado");
   const passo = 3, n = Math.floor((cl - 12) / passo), finX = x0 + 2 + (n * passo) / 2;
   add("aletas", "Dissipador (aletas)", "metal", [finX, finYc, -5], [n * passo, finH, H - 30], [0, 0, 0], 3, "estimado", { tipo: "aletas", n, passo, esp: 0.5 });
-  const rp = Math.min(3, finH / 4);
-  [-0.3, -0.1, 0.1, 0.3].forEach((k, i) =>
-    add(`heatpipe-${i}`, "Heatpipe", "cobre", [finX, finYc, -5 + k * (H - 30)], [n * passo, 2 * rp, 2 * rp], [0, 0, 0], 3, "estimado", { tipo: "tubo", raio: rp }));
+  // heatpipes dobrados: encostam na base de cobre, descem e correm pelo meio das aletas até as duas pontas
+  const rp = Math.min(3, finH / 4), hh = finY[1] - rp - finYc, xe = (n * passo) / 2 - rp, bx = gx - finX, dob = Math.min(12, hh);
+  const caminho: Vec3[] = [[-xe, -hh / 2, 0], [Math.max(-xe + 1, bx - 21 - dob), -hh / 2, 0], [Math.max(-xe + 2, bx - 21), hh / 2, 0],
+    [Math.min(xe - 2, bx + 21), hh / 2, 0], [Math.min(xe - 1, bx + 21 + dob), -hh / 2, 0], [xe, -hh / 2, 0]];
+  [-1.5, -0.5, 0.5, 1.5].forEach((k, i) =>
+    add(`heatpipe-${i}`, "Heatpipe", "cobre", [finX, finYc + hh / 2, gz + k * 9], [n * passo, hh + 2 * rp, 2 * rp], [0, 0, 0], 3, "estimado", { tipo: "curva", pontos: caminho, raio: rp }));
 
-  // Shroud: tampa com os furos dos fans, paredes laterais e parafusos; fans dentro dos furos
+  // Shroud: tampa com os furos dos fans, laterais chanfradas (perfil) e ponta; fans dentro dos furos
+  const CH = 4;   // chanfro entre a tampa e as laterais
   const vaoX = [x0 + 6, x1 - 8];
   const passoFan = (vaoX[1] - vaoX[0]) / nFans;
-  const r = Math.min(48, (H - 14) / 2, passoFan / 2 - 3);
+  const r = Math.min(48, (H - 21) / 2, passoFan / 2 - 3);
   const furos = Array.from({ length: nFans }, (_, i) => ({ x: vaoX[0] + passoFan * (i + 0.5), z: 3, r: r + 1.5 }));
-  add("shroud", "Shroud (tampa)", "lo", [cx, -T / 2 + 1.5, 0], [cl, 3, H - 2], E_SH, 4, "estimado", { tipo: "placa", furos });
-  const paredeH = fanT - 3 + finH * 0.5, paredeY = -T / 2 + 3 + paredeH / 2;
-  add("shroud-parede-0", "Shroud (lateral)", "lo", [cx, paredeY, -H / 2 + 2], [cl, paredeH, 2], E_SH, 4, "estimado");
-  add("shroud-parede-1", "Shroud (lateral)", "lo", [cx, paredeY, H / 2 - 2], [cl, paredeH, 2], E_SH, 4, "estimado");
-  add("shroud-parede-2", "Shroud (ponta)", "lo", [x0 + 1, paredeY, 0], [2, paredeH, H - 6], E_SH, 4, "estimado");
+  add("shroud", "Shroud (tampa)", "lo", [cx, -T / 2 + 1.5, 0], [cl, 3, H - 2 - 2 * CH], E_SH, 4, "estimado", { tipo: "placa", furos });
+  const paredeH = fanT - 3 + finH * 0.5, paredeY = -T / 2 + 3 + paredeH / 2, hy = (3 + paredeH) / 2;
+  [-1, 1].forEach((s, i) => {
+    const o = (s * CH) / 2;   // perfil em (y, z): chanfro por fora, parede de 2 mm e a contraface até a tampa
+    const pontos: [number, number][] = [[-hy, -o], [-hy + CH, o], [hy, o], [hy, o - s * 2], [-hy + CH + 1, o - s * 2], [-hy + 3, -o]];
+    add(`shroud-parede-${i}`, "Shroud (lateral chanfrada)", "lo", [cx, -T / 2 + hy, s * (H / 2 - 1 - CH / 2)], [cl, 2 * hy, CH], E_SH, 4, "estimado", { tipo: "perfil", eixo: "x", pontos });
+  });
+  add("shroud-parede-2", "Shroud (ponta)", "lo", [x0 + 1, paredeY, 0], [2, paredeH, H - 2 - 2 * CH], E_SH, 4, "estimado");
   furos.forEach((f, i) => {
     add(`fan-${i}`, `Fan ${i + 1}`, "hi", [f.x, -T / 2 + fanT / 2, f.z], [2 * r, fanT, 2 * r], E_FAN, 5, fFans, { tipo: "fan", raio: r, pas: 9 });
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz], j) =>
-      add(`shroud-parafuso-${i}-${j}`, "Parafuso do shroud", "metal", [f.x + sx * Math.min(f.r + 2, passoFan / 2 - 3), -T / 2 - 0.2, sz * (H / 2 - 6)], [3, 0.4, 3], E_SH, 4, "estimado", { tipo: "cilindro", raio: 1.5 }));
+      add(`shroud-parafuso-${i}-${j}`, "Parafuso do shroud", "metal", [f.x + sx * Math.min(f.r + 2, passoFan / 2 - 3), -T / 2 - 0.2, sz * (H / 2 - 5 - CH)], [3, 0.4, 3], E_SH, 4, "estimado", { tipo: "cilindro", raio: 1.5 }));
   });
 
   return { tam: [L, T, H], partes, estimados, ancoras: { pcie: [fim - PCIE.total / 2, pcbY, -H / 2 + 3] } };

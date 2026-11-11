@@ -1,15 +1,17 @@
 "use client";
 // Renderizador único das peças procedurais (lib/peca.ts), em estilo técnico: tons chapados, contorno em tinta escura.
 // Clique abre a vista explodida: a peça sai do gabinete pela lateral e as subpeças se afastam escalonadas.
-import { Edges } from "@react-three/drei";
+// Subpeças que andam juntas na explosão e têm o mesmo tom viram uma malha só (lib/peca.ts: lotes), com um contorno;
+// o rótulo de cada subpeça sai da faixa de triângulos atingida.
+import { Edges, Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
-import { BoxGeometry, type BufferGeometry, ExtrudeGeometry, type Group, MeshLambertMaterial, Path, Shape } from "three";
+import { BoxGeometry, type BufferGeometry, CatmullRomCurve3, CylinderGeometry, EdgesGeometry, ExtrudeGeometry, type Group, Matrix4, MeshLambertMaterial, Path, Shape, TubeGeometry, Vector2, Vector3 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { Caixa, Vec3 } from "@/lib/cena";
-import { type Modelo, type Sub, type Tom, progressoExplosao } from "@/lib/peca";
+import type { Caixa, Vec3 } from "../lib/cena";
+import { type Forma, type Lote, type Modelo, type Sub, type Tom, lotes, progressoExplosao } from "../lib/peca";
 
-const TINTA = "#0b131c";
+const TINTA = "#0b131c", ZERO: Vec3 = [0, 0, 0];
 const COR: Record<Tom, string> = {
   lo: "#2c3d51", mid: "#3f5671", hi: "#7d93ad", lit: "#dfe8ef",
   pcb: "#2a5241", ouro: "#c8a04c", cobre: "#b9774a", metal: "#9aa7b6", escuro: "#16202b", vidro: "#9fc4e8", trilha: "#4f9273",
@@ -25,30 +27,72 @@ function geometriaPa(r: number): BufferGeometry {
   return new ExtrudeGeometry(forma.closePath(), { depth: 0.8, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, -0.4, 0);
 }
 
-function geometriaAletas(s: Sub & { forma: { tipo: "aletas" } }): BufferGeometry {
-  const { n, passo, esp } = s.forma;
-  const placas = Array.from({ length: n }, (_, i) => s.forma.eixo === "z"
-    ? new BoxGeometry(s.tam[0], s.tam[1], esp).translate(0, 0, -s.tam[2] / 2 + passo * (i + 0.5))
-    : new BoxGeometry(esp, s.tam[1], s.tam[2]).translate(-s.tam[0] / 2 + passo * (i + 0.5), 0, 0));
+type De<T extends Forma["tipo"]> = Extract<Forma, { tipo: T }>;
+
+function geometriaAletas(tam: Vec3, { n, passo, esp, eixo }: De<"aletas">): BufferGeometry {
+  const placas = Array.from({ length: n }, (_, i) => eixo === "z"
+    ? new BoxGeometry(tam[0], tam[1], esp).translate(0, 0, -tam[2] / 2 + passo * (i + 0.5))
+    : new BoxGeometry(esp, tam[1], tam[2]).translate(-tam[0] / 2 + passo * (i + 0.5), 0, 0));
   return mergeGeometries(placas);
 }
 
-function geometriaGrade(s: Sub & { forma: { tipo: "grade" } }): BufferGeometry {
-  const n = s.forma.n, cheio = s.forma.cheio ?? 0.6;
-  const cel = s.tam.map((v, i) => v / n[i]), lado = cel.map((v, i) => (n[i] > 1 ? v * cheio : v));
+function geometriaGrade(tam: Vec3, f: De<"grade">): BufferGeometry {
+  const n = f.n, cheio = f.cheio ?? 0.6;
+  const cel = tam.map((v, i) => v / n[i]), lado = cel.map((v, i) => (n[i] > 1 ? v * cheio : v));
   const caixas: BufferGeometry[] = [];
   for (let i = 0; i < n[0]; i++) for (let j = 0; j < n[1]; j++) for (let k = 0; k < n[2]; k++)
     caixas.push(new BoxGeometry(lado[0], lado[1], lado[2]).translate(
-      -s.tam[0] / 2 + cel[0] * (i + 0.5), -s.tam[1] / 2 + cel[1] * (j + 0.5), -s.tam[2] / 2 + cel[2] * (k + 0.5)));
+      -tam[0] / 2 + cel[0] * (i + 0.5), -tam[1] / 2 + cel[1] * (j + 0.5), -tam[2] / 2 + cel[2] * (k + 0.5)));
   return mergeGeometries(caixas);
 }
 
-function geometriaPlaca(s: Sub & { forma: { tipo: "placa" } }): BufferGeometry {
+function geometriaPlaca(s: Sub, f: De<"placa">): BufferGeometry {
   const [w, t, h] = s.tam;
   const forma = new Shape().moveTo(-w / 2, -h / 2).lineTo(w / 2, -h / 2).lineTo(w / 2, h / 2).lineTo(-w / 2, h / 2).closePath();
   // furos em coordenadas da placa (x, -z): a rotação abaixo leva o y do Shape para -z
-  for (const f of s.forma.furos) forma.holes.push(new Path().absarc(f.x - s.pos[0], -(f.z - s.pos[2]), f.r, 0, Math.PI * 2, true));
+  for (const u of f.furos) forma.holes.push(new Path().absarc(u.x - s.pos[0], -(u.z - s.pos[2]), u.r, 0, Math.PI * 2, true));
   return new ExtrudeGeometry(forma, { depth: t, bevelEnabled: false, curveSegments: 40 }).rotateX(-Math.PI / 2).translate(0, -t / 2, 0);
+}
+
+// O Shape vive em XY e extruda em Z; a troca cíclica de eixos leva a extrusão para x ou y (ordem dos pontos em lib/peca.ts).
+const GIRO = {
+  x: new Matrix4().makeBasis(new Vector3(0, 1, 0), new Vector3(0, 0, 1), new Vector3(1, 0, 0)),
+  y: new Matrix4().makeBasis(new Vector3(0, 0, 1), new Vector3(1, 0, 0), new Vector3(0, 1, 0)),
+  z: new Matrix4(),
+};
+function geometriaPerfil(tam: Vec3, f: De<"perfil">): BufferGeometry {
+  const comp = tam["xyz".indexOf(f.eixo)];
+  return new ExtrudeGeometry(new Shape(f.pontos.map(([a, b]) => new Vector2(a, b))), { depth: comp, bevelEnabled: false })
+    .translate(0, 0, -comp / 2).applyMatrix4(GIRO[f.eixo]);
+}
+
+/** Geometria de uma subpeça (menos o fan), centrada nela e já na orientação final. */
+function geometriaSub(s: Sub): BufferGeometry {
+  const f = s.forma;
+  switch (f.tipo) {
+    case "tubo": return new CylinderGeometry(f.raio, f.raio, s.tam[0], 16).rotateZ(Math.PI / 2);
+    case "cilindro": return f.eixo === "z" ? new CylinderGeometry(f.raio, f.raio, s.tam[2], 24).rotateX(Math.PI / 2) : new CylinderGeometry(f.raio, f.raio, s.tam[1], 24);
+    case "aletas": return geometriaAletas(s.tam, f);
+    case "grade": return geometriaGrade(s.tam, f);
+    case "placa": return geometriaPlaca(s, f);
+    case "perfil": return geometriaPerfil(s.tam, f);
+    case "curva": return new TubeGeometry(new CatmullRomCurve3(f.pontos.map((p) => new Vector3(...p)), false, "catmullrom", 0.25), f.pontos.length * 8, f.raio, 12);
+    default: return new BoxGeometry(...s.tam);
+  }
+}
+
+/** Malha única de um lote: triângulos fundidos, segmentos do contorno e as faixas de triângulos de cada subpeça. */
+export function malhaLote(l: Lote) {
+  const geos: BufferGeometry[] = [], contorno: number[] = [], faixas: { fim: number; nome: string }[] = [];
+  let tri = 0;
+  for (const s of l.subs) {
+    const g0 = geometriaSub(s), g = (g0.index ? g0.toNonIndexed() : g0).translate(s.pos[0] - l.pos[0], s.pos[1] - l.pos[1], s.pos[2] - l.pos[2]);
+    geos.push(g);
+    tri += g.attributes.position.count / 3;
+    faixas.push({ fim: tri, nome: rotulo(s) });
+    if (s.forma.tipo !== "grade") for (const v of new EdgesGeometry(g, 20).attributes.position.array) contorno.push(v);   // pinos e trilhas ficam sem contorno
+  }
+  return { geo: mergeGeometries(geos), contorno, faixas };
 }
 
 function Fan({ s, mat, spin }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]> }) {
@@ -83,24 +127,24 @@ function Fan({ s, mat, spin }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: T
 
 const rotulo = (s: Sub) => s.fonte === "estimado" ? `${s.nome} (estimado)` : s.fonte === "norma" ? `${s.nome} (norma)` : s.nome;
 
-function Parte({ s, mat, spin }: { s: Sub; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]> }) {
-  const geo = useMemo(() => {
-    if (s.forma.tipo === "aletas") return geometriaAletas(s as Sub & { forma: { tipo: "aletas" } });
-    if (s.forma.tipo === "grade") return geometriaGrade(s as Sub & { forma: { tipo: "grade" } });
-    if (s.forma.tipo === "placa") return geometriaPlaca(s as Sub & { forma: { tipo: "placa" } });
-    return null;
-  }, [s]);
-  if (s.forma.tipo === "fan") return <Fan s={s as Sub & { forma: { tipo: "fan" } }} mat={mat} spin={spin} />;
+const semRaio = () => null;
+
+function Parte({ l, mat, spin }: { l: Lote; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]> }) {
+  const s = l.subs[0], fan = s.forma.tipo === "fan";
+  const m = useMemo(() => (fan ? null : malhaLote(l)), [l, fan]);
+  if (!m) return <Fan s={s as Sub & { forma: { tipo: "fan" } }} mat={mat} spin={spin} />;
+  // o vidro não intercepta cliques nas peças de dentro
   return (
-    <mesh material={mat(s.tom)} {...(geo ? { geometry: geo } : {})} userData={{ nome: rotulo(s) }}
-      {...(s.tom === "vidro" ? { raycast: () => null } : {})}   // o vidro não intercepta cliques nas peças de dentro
-      rotation={s.forma.tipo === "tubo" ? [0, 0, Math.PI / 2] : s.forma.tipo === "cilindro" && s.forma.eixo === "z" ? [Math.PI / 2, 0, 0] : [0, 0, 0]}>
-      {s.forma.tipo === "caixa" && <boxGeometry args={s.tam} />}
-      {s.forma.tipo === "tubo" && <cylinderGeometry args={[s.forma.raio, s.forma.raio, s.tam[0], 16]} />}
-      {s.forma.tipo === "cilindro" && <cylinderGeometry args={[s.forma.raio, s.forma.raio, s.forma.eixo === "z" ? s.tam[2] : s.tam[1], 24]} />}
-      {s.forma.tipo !== "grade" && <Edges color={TINTA} threshold={20} {...(geo ? { geometry: geo } : {})} />}
+    <mesh geometry={m.geo} material={mat(s.tom)} userData={{ faixas: m.faixas }} {...(s.tom === "vidro" ? { raycast: semRaio } : {})}>
+      {m.contorno.length > 0 && <Line segments points={m.contorno} color={TINTA} lineWidth={1} raycast={semRaio} />}
     </mesh>
   );
+}
+
+/** Nome da subpeça sob o ponteiro: o da malha, ou o da faixa de triângulos atingida numa malha fundida. */
+function nomeEm(e: { object: { userData: Record<string, any> }; faceIndex?: number | null }): string {
+  const { nome, faixas } = e.object.userData as { nome?: string; faixas?: { fim: number; nome: string }[] };
+  return nome ?? faixas?.find((f) => (e.faceIndex ?? 0) < f.fim)?.nome ?? "";
 }
 
 interface Props {
@@ -108,10 +152,12 @@ interface Props {
   posicao: (t: number) => Vec3 | null;   // posição montada (tutorial incluso), em mm
   saida: number;                         // quanto a placa sai do gabinete em +Z quando aberta, em mm
   onClick: () => void; onHover: (n: string | null) => void;
+  encaixe?: number;                      // subpeças móveis (travas, alavanca, parafusos): 0 = fechadas (padrão), 1 = abertas
 }
 
-export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover }: Props) {
+export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0 }: Props) {
   const maxOrdem = Math.max(...modelo.partes.map((p) => p.ordem));
+  const grupos = useMemo(() => lotes(modelo.partes), [modelo]);
   const mats = useMemo(() => {
     const m = {} as Record<Tom, MeshLambertMaterial>;
     for (const t of Object.keys(COR) as Tom[]) m[t] = new MeshLambertMaterial({ color: COR[t], flatShading: true, emissive: "#ff2a1a", emissiveIntensity: 0 });
@@ -139,25 +185,28 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
     saidaAtual.current += ((aberto ? saida : 0) - saidaAtual.current) * (reduzido ? 1 : 1 - Math.exp(-dt * 6));
     g.position.set(base[0] * escala, base[1] * escala, (base[2] + saidaAtual.current) * escala);
 
-    modelo.partes.forEach((p, i) => {
+    grupos.forEach((l, i) => {
       const o = partes.current[i];
       if (!o) return;
-      const k = progressoExplosao(p.ordem, maxOrdem, t - (aberto ? 0.35 : 0), aberto);
-      o.position.set(p.pos[0] + p.explode[0] * k, p.pos[1] + p.explode[1] * k, p.pos[2] + p.explode[2] * k);
+      const k = progressoExplosao(l.ordem, maxOrdem, t - (aberto ? 0.35 : 0), aberto);
+      const d = l.movel?.desloca ?? ZERO, gira = l.movel?.gira;
+      o.position.set(l.pos[0] + l.explode[0] * k + d[0] * encaixe, l.pos[1] + l.explode[1] * k + d[1] * encaixe, l.pos[2] + l.explode[2] * k + d[2] * encaixe);
+      if (gira) o.rotation.set(gira[0] * encaixe, gira[1] * encaixe, gira[2] * encaixe);
     });
     if (!reduzido) for (const f of spin.current) f.rotation.y += dt * (aberto ? 0.4 : 1.6);
     const pulso = c.conflito && !aberto ? 0.35 + 0.35 * Math.sin(agora * 4) : 0;
     for (const m of Object.values(mats)) m.emissiveIntensity = pulso;
   });
 
+  const passar = (e: Parameters<typeof nomeEm>[0] & { stopPropagation: () => void }) => { e.stopPropagation(); onHover(aberto ? `${c.nome} · ${nomeEm(e)}` : c.nome); };
   return (
     <group ref={raiz} scale={escala}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      onPointerOver={(e) => { e.stopPropagation(); onHover(aberto ? `${c.nome} · ${e.object.userData.nome ?? ""}` : c.nome); }}
+      onPointerOver={passar} onPointerMove={aberto ? passar : undefined}   // numa malha fundida o rótulo muda sem trocar de objeto
       onPointerOut={() => onHover(null)}>
-      {modelo.partes.map((p, i) => (
-        <group key={p.id} ref={(o) => { partes.current[i] = o; }} position={p.pos}>
-          <Parte s={p} mat={mat} spin={spin} />
+      {grupos.map((l, i) => (
+        <group key={l.subs[0].id} ref={(o) => { partes.current[i] = o; }} position={l.pos}>
+          <Parte l={l} mat={mat} spin={spin} />
         </group>
       ))}
     </group>

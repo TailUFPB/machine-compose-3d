@@ -96,6 +96,15 @@ def avaliar(store: Store, itens: list[BuildItem]) -> list[Achado]:
         achados.append(_achado("par:psu_form", sev, [psu, case], txt,
                                _trocar(store, psu, lambda c: c.specs["form_factor"] in case.specs["psu_form_factor"]
                                        and c.specs["potencia_w"] >= consumo_estimado(comps) * margem), fisico=True))
+    # orientação real da torre: o comprimento da fonte (c, 150 mm na ATX) fica na largura (l) do gabinete e a
+    # profundidade dela (l) corre no comprimento. ponytail: compara com a largura externa (a ficha não traz a interna)
+    if psu and case and psu.specs["dimensoes"]["c"] > case.specs["dimensoes"]["l"]:
+        achados.append(_achado("par:psu_largura", "bloqueante", [psu, case],
+                               f"Fonte de {psu.specs['dimensoes']['c']} mm de largura não cabe no {case.nome} "
+                               f"({case.specs['dimensoes']['l']} mm de largura).",
+                               _trocar(store, psu, lambda c: c.specs["dimensoes"]["c"] <= case.specs["dimensoes"]["l"]
+                                       and c.specs["form_factor"] in case.specs["psu_form_factor"]
+                                       and c.specs["potencia_w"] >= consumo_estimado(comps) * margem), fisico=True))
     # comprimento da GPU x folga
     if gpu and case and gpu.specs["comprimento_mm"] > case.specs["gpu_max_mm"]:
         achados.append(_achado("par:gpu_comprimento", "bloqueante", [gpu, case],

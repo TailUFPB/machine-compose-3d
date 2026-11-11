@@ -322,7 +322,15 @@
      "c": 170,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 80,
+    "backplate": false,
+    "saidas": [
+     "DisplayPort",
+     "HDMI",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -345,7 +353,16 @@
      "c": 242,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 90,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -368,7 +385,16 @@
      "c": 240,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 90,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -391,7 +417,16 @@
      "c": 245,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 90,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -414,7 +449,10 @@
      "c": 250,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 90,
+    "backplate": true
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -437,7 +475,16 @@
      "c": 267,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 100,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -460,7 +507,16 @@
      "c": 270,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 100,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -483,7 +539,16 @@
      "c": 305,
      "a": 120,
      "l": 60
-    }
+    },
+    "fans": 3,
+    "fan_mm": 90,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -506,7 +571,16 @@
      "c": 340,
      "a": 120,
      "l": 60
-    }
+    },
+    "fans": 3,
+    "fan_mm": 100,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -529,7 +603,14 @@
      "c": 240,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -552,7 +633,16 @@
      "c": 250,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 90,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -575,7 +665,16 @@
      "c": 280,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 100,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -598,7 +697,16 @@
      "c": 305,
      "a": 120,
      "l": 60
-    }
+    },
+    "fans": 3,
+    "fan_mm": 95,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -621,7 +729,16 @@
      "c": 190,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 80,
+    "backplate": false,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -644,7 +761,16 @@
      "c": 204,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 85,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -667,7 +793,16 @@
      "c": 270,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "fan_mm": 100,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -713,7 +848,16 @@
      "c": 290,
      "a": 120,
      "l": 60
-    }
+    },
+    "fans": 3,
+    "fan_mm": 90,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -736,7 +880,16 @@
      "c": 315,
      "a": 120,
      "l": 60
-    }
+    },
+    "fans": 3,
+    "fan_mm": 100,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -759,7 +912,15 @@
      "c": 272,
      "a": 120,
      "l": 40
-    }
+    },
+    "fans": 2,
+    "backplate": true,
+    "saidas": [
+     "DisplayPort",
+     "DisplayPort",
+     "DisplayPort",
+     "HDMI"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -786,7 +947,19 @@
     "dimensoes": {
      "c": 244,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "PS/2",
+     "USB-A",
+     "USB-A",
+     "HDMI",
+     "DisplayPort",
+     "USB-A",
+     "USB-A",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": false
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -813,7 +986,19 @@
     "dimensoes": {
      "c": 244,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "PS/2",
+     "USB-A",
+     "USB-A",
+     "HDMI",
+     "DisplayPort",
+     "USB-A",
+     "USB-A",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": false
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -841,7 +1026,21 @@
     "dimensoes": {
      "c": 305,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "HDMI",
+     "DisplayPort",
+     "USB-C",
+     "USB-A",
+     "USB-A",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": true
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -869,7 +1068,22 @@
     "dimensoes": {
      "c": 305,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-C",
+     "USB-C",
+     "HDMI",
+     "DisplayPort",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": true
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -896,7 +1110,22 @@
     "dimensoes": {
      "c": 170,
      "a": 170
-    }
+    },
+    "portas_traseiras": [
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-C",
+     "USB-C",
+     "HDMI",
+     "DisplayPort",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": true
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -922,7 +1151,8 @@
     "dimensoes": {
      "c": 244,
      "a": 244
-    }
+    },
+    "m2_dissipador": false
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -948,7 +1178,21 @@
     "dimensoes": {
      "c": 305,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "HDMI",
+     "DisplayPort",
+     "USB-C",
+     "USB-A",
+     "USB-A",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": true
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -974,7 +1218,19 @@
     "dimensoes": {
      "c": 244,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "PS/2",
+     "USB-A",
+     "USB-A",
+     "HDMI",
+     "DisplayPort",
+     "USB-A",
+     "USB-A",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": true
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1001,7 +1257,21 @@
     "dimensoes": {
      "c": 305,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "HDMI",
+     "DisplayPort",
+     "USB-C",
+     "USB-A",
+     "USB-A",
+     "RJ45",
+     "audio"
+    ],
+    "m2_dissipador": true
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1029,7 +1299,20 @@
     "dimensoes": {
      "c": 305,
      "a": 244
-    }
+    },
+    "portas_traseiras": [
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "USB-A",
+     "HDMI",
+     "DisplayPort",
+     "USB-C",
+     "USB-A",
+     "USB-A",
+     "RJ45",
+     "audio"
+    ]
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1124,7 +1407,8 @@
    "modelo": "NV3 1TB NVMe",
    "specs": {
     "interface": "M.2",
-    "capacidade_gb": 1000
+    "capacidade_gb": 1000,
+    "formato": "M.2"
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1135,7 +1419,8 @@
    "modelo": "Black SN770 1TB NVMe",
    "specs": {
     "interface": "M.2",
-    "capacidade_gb": 1000
+    "capacidade_gb": 1000,
+    "formato": "M.2"
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1157,7 +1442,8 @@
    "modelo": "MX500 1TB SATA",
    "specs": {
     "interface": "SATA",
-    "capacidade_gb": 1000
+    "capacidade_gb": 1000,
+    "formato": "2.5"
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1346,6 +1632,16 @@
      "c": 480,
      "a": 491,
      "l": 235
+    },
+    "posicoes_fan": {
+     "frente": 3,
+     "topo": 3,
+     "traseira": 1
+    },
+    "lateral": "vidro",
+    "baias": {
+     "2.5": 2,
+     "3.5": 2
     }
    },
    "fonte": "seed:demo/ficha-tecnica"
@@ -1377,6 +1673,16 @@
      "c": 446,
      "a": 464,
      "l": 227
+    },
+    "posicoes_fan": {
+     "frente": 3,
+     "topo": 2,
+     "traseira": 1
+    },
+    "lateral": "vidro",
+    "baias": {
+     "2.5": 2,
+     "3.5": 1
     }
    },
    "fonte": "seed:demo/ficha-tecnica"
@@ -1408,7 +1714,13 @@
      "c": 487,
      "a": 474,
      "l": 230
-    }
+    },
+    "posicoes_fan": {
+     "frente": 3,
+     "topo": 3,
+     "traseira": 1
+    },
+    "lateral": "vidro"
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1436,6 +1748,15 @@
      "c": 387,
      "a": 381,
      "l": 230
+    },
+    "posicoes_fan": {
+     "frente": 2,
+     "topo": 2,
+     "traseira": 1
+    },
+    "baias": {
+     "2.5": 2,
+     "3.5": 1
     }
    },
    "fonte": "seed:demo/ficha-tecnica"
@@ -1464,6 +1785,11 @@
      "c": 376,
      "a": 292,
      "l": 185
+    },
+    "lateral": "chapa",
+    "baias": {
+     "2.5": 3,
+     "3.5": 1
     }
    },
    "fonte": "seed:demo/ficha-tecnica"
@@ -1483,7 +1809,10 @@
      "LGA1700"
     ],
     "ram_altura_max_mm": 60,
-    "radiador_mm": null
+    "radiador_mm": null,
+    "fans": 1,
+    "fan_mm": 120,
+    "heatpipes": 4
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1502,7 +1831,10 @@
      "LGA1700"
     ],
     "ram_altura_max_mm": 42,
-    "radiador_mm": null
+    "radiador_mm": null,
+    "fans": 2,
+    "fan_mm": 120,
+    "heatpipes": 6
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1521,7 +1853,9 @@
      "LGA1700"
     ],
     "ram_altura_max_mm": 32,
-    "radiador_mm": null
+    "radiador_mm": null,
+    "fans": 2,
+    "fan_mm": 140
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1540,7 +1874,10 @@
      "LGA1700"
     ],
     "ram_altura_max_mm": null,
-    "radiador_mm": 240
+    "radiador_mm": 240,
+    "fans": 2,
+    "fan_mm": 120,
+    "radiador_posicao": "topo"
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
@@ -1559,7 +1896,9 @@
      "LGA1700"
     ],
     "ram_altura_max_mm": null,
-    "radiador_mm": 360
+    "radiador_mm": 360,
+    "fans": 3,
+    "fan_mm": 120
    },
    "fonte": "seed:demo/ficha-tecnica"
   },

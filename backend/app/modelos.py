@@ -18,6 +18,7 @@ class Componente(BaseModel):
     marca: str
     modelo: str
     specs: dict[str, Any]
+    specs_origem: dict[str, dict[str, str]] = Field(default_factory=dict)   # campo -> {url, coletado_em} (ficha extraída)
     fonte: str
 
     @property
