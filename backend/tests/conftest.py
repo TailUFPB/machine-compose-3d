@@ -1,3 +1,8 @@
+import os
+
+# Testes rodam offline: variáveis de ambiente vencem o .env do desenvolvedor.
+os.environ.update(LLM_PROVIDER="none", BUSCA_PROVIDER="seed", SERPER_API_KEY="", SUPABASE_URL="", LANGFUSE_PUBLIC_KEY="", LANGFUSE_SECRET_KEY="")
+
 import pytest
 from fastapi.testclient import TestClient
 
