@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import agente, exportar, importar, precos, resultado
+from . import agente, exportar, importar, precos, resultado, upgrades
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
@@ -282,3 +282,8 @@ def cena(build_id: str, store: Store = Depends(get_store)):
     return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs} for c in comps if c.tipo != "extra"],
             "conflitos": conflitos,
             "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos]}
+
+
+@app.get("/builds/{build_id}/upgrades", response_model=list[upgrades.Upgrade])
+def ver_upgrades(build_id: str, verba: float | None = None, store: Store = Depends(get_store)):
+    return upgrades.sugerir(store, _build(store, build_id), verba)
