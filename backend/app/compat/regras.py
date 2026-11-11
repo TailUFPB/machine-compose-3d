@@ -95,7 +95,7 @@ def avaliar(store: Store, itens: list[BuildItem]) -> list[Achado]:
                else f"Fonte {psu.specs['form_factor']} não cabe no {case.nome} (aceita {', '.join(case.specs['psu_form_factor'])}).")
         achados.append(_achado("par:psu_form", sev, [psu, case], txt,
                                _trocar(store, psu, lambda c: c.specs["form_factor"] in case.specs["psu_form_factor"]
-                                       and c.specs["potencia_w"] >= psu.specs["potencia_w"]), fisico=True))
+                                       and c.specs["potencia_w"] >= consumo_estimado(comps) * margem), fisico=True))
     # comprimento da GPU x folga
     if gpu and case and gpu.specs["comprimento_mm"] > case.specs["gpu_max_mm"]:
         achados.append(_achado("par:gpu_comprimento", "bloqueante", [gpu, case],

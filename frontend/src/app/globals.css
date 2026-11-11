@@ -1,0 +1,52 @@
+:root {
+  --fundo: #f5f6f8; --superficie: #ffffff; --borda: #dfe2e8; --texto: #1b1f27; --suave: #5d6573;
+  --primaria: #2f5fd0; --primaria-texto: #fff; --ok: #1f8a4c; --atencao: #b7791f; --erro: #c53030; --sug: #4a6fa5;
+  --raio: 10px; --sombra: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #12151b; --superficie: #1a1e26; --borda: #2c323e; --texto: #e7eaf0; --suave: #9aa3b2;
+    --primaria: #6b93f0; --primaria-texto: #0d1220; --ok: #48bb78; --atencao: #ecc94b; --erro: #fc8181; --sug: #90b4e8;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fundo); color: var(--texto); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--primaria); }
+h1, h2, h3 { margin: 0 0 .5rem; line-height: 1.25; }
+h1 { font-size: 1.25rem; } h2 { font-size: 1.1rem; } h3 { font-size: 1rem; }
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+header.topo { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; justify-content: space-between; margin-bottom: 12px; }
+.aviso-dados { font-size: .8rem; color: var(--suave); }
+.card { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; box-shadow: var(--sombra); margin-bottom: 16px; }
+.grade { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.linha { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.entre { justify-content: space-between; }
+label { display: grid; gap: 4px; font-size: .85rem; color: var(--suave); }
+input, select, textarea { font: inherit; color: var(--texto); background: var(--fundo); border: 1px solid var(--borda); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+textarea { width: 100%; min-height: 90px; }
+button { font: inherit; cursor: pointer; border-radius: 8px; padding: 8px 14px; border: 1px solid var(--borda); background: var(--superficie); color: var(--texto); }
+button.primario { background: var(--primaria); color: var(--primaria-texto); border-color: var(--primaria); }
+button.perigo { color: var(--erro); }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--primaria); outline-offset: 2px; }
+nav.abas { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--borda); margin-bottom: 16px; }
+nav.abas button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 10px 14px; white-space: nowrap; }
+nav.abas button[aria-selected="true"] { border-bottom-color: var(--primaria); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+th { color: var(--suave); font-weight: 500; }
+.tabela-rolagem { overflow-x: auto; }
+.selo { display: inline-block; font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.sev-bloqueante { color: var(--erro); } .sev-atencao { color: var(--atencao); } .sev-sugestao { color: var(--sug); }
+.ok { color: var(--ok); } .erro { color: var(--erro); } .suave { color: var(--suave); font-size: .85rem; }
+.achado { border-left: 4px solid currentColor; padding: 8px 12px; margin-bottom: 8px; background: var(--fundo); border-radius: 6px; }
+.achado p { margin: 4px 0; color: var(--texto); }
+.cena { height: 460px; border-radius: var(--raio); overflow: hidden; background: #0e1117; }
+.barra { height: 8px; background: var(--borda); border-radius: 4px; overflow: hidden; }
+.barra > span { display: block; height: 100%; background: var(--primaria); }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.modal > div { max-width: 480px; width: 100%; }
+.erro-caixa { color: var(--erro); background: var(--fundo); padding: 8px 12px; border-radius: 8px; }
+@media (max-width: 600px) { main { padding: 12px; } .cena { height: 340px; } th, td { padding: 6px 4px; } }

@@ -84,6 +84,11 @@ def criar_build(dados: BuildCriar, store: Store = Depends(get_store)):
     return store.criar_build(dados)
 
 
+@app.get("/builds", response_model=list[Build])
+def listar_builds(usuario: str = "demo", store: Store = Depends(get_store)):
+    return [b for b in store.builds.values() if b.usuario == usuario]
+
+
 @app.get("/builds/{build_id}", response_model=Build)
 def ver_build(build_id: str, store: Store = Depends(get_store)):
     return _build(store, build_id)

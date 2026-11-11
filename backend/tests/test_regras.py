@@ -78,3 +78,9 @@ def test_filtro_manual_marca_motivo(store):
     assert "Socket" in regras.motivo_incompativel(store, base, store.componentes["i5-12400f"])
     # a CPU nova substitui a atual: não conflita com a CPU que sai
     assert regras.motivo_incompativel(store, base, store.componentes["r7-7800x3d"]) is None
+
+
+def test_fonte_atx_em_gabinete_sfx_sugere_sfx_suficiente(store):
+    b = bloq(store, ["r5-7600", "mb-b650i-strix", "case-nr200p", "rtx-4070s", "psu-rm850e"])
+    a = next(a for a in b if a.id.startswith("par:psu_form"))
+    assert a.correcao_sugerida.para_id == "psu-sf750"

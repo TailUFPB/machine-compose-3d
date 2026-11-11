@@ -122,3 +122,8 @@ def test_ignorar_achado(client):
     aid = r["achados"][0]["id"]
     r = client.post(f"/builds/{bid}/achados/{aid}/ignorar").json()
     assert next(a for a in r["achados"] if a["id"] == aid)["status"] == "ignorado"
+
+
+def test_listar_builds(client):
+    a = criar(client)
+    assert a in [b["id"] for b in client.get("/builds").json()]

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = Field(default="", repr=False)
     langfuse_base_url: str = "https://cloud.langfuse.com"
 
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://localhost:3010"
 
 
 @lru_cache
