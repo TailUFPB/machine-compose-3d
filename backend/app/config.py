@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT_DIR / ".env", extra="ignore")
 
     # LLM: none = heurística determinística (padrão, reprodutível)
-    llm_provider: Literal["none", "anthropic", "openai"] = "none"
+    llm_provider: Literal["none", "anthropic", "openai", "openrouter"] = "none"
     llm_model: str = "claude-opus-5-5"
     llm_api_key: str = Field(default="", repr=False)
-    llm_base_url: str = ""          # só para provider=openai (qualquer API compatível)
+    llm_base_url: str = ""          # provider=openai (qualquer API compatível); openrouter já tem padrão
     llm_timeout_seconds: float = 60
 
     # Agente selecionador

@@ -40,3 +40,21 @@ def test_llm_quebrado_cai_no_determinismo(store, monkeypatch):
     monkeypatch.setattr(llm, "_texto", falha)
     assert llm.completar_json("x", "s", "u") is None
     assert precos.pesquisar(store, "rx-7600").tem_preco
+
+
+def test_openrouter_usa_endpoint_padrao(monkeypatch):
+    openai = pytest.importorskip("openai")
+    usado = {}
+    class Falso:
+        def __init__(self, **kw):
+            usado.update(kw)
+            self.chat = self
+            self.completions = self
+        def create(self, **kw):
+            msg = type("M", (), {"content": "{}"})
+            return type("R", (), {"choices": [type("C", (), {"message": msg})]})
+    monkeypatch.setattr(openai, "OpenAI", Falso)
+    monkeypatch.setattr(get_settings(), "llm_provider", "openrouter")
+    monkeypatch.setattr(get_settings(), "llm_base_url", "")
+    assert llm._texto("s", "u") == "{}"
+    assert usado["base_url"] == llm.OPENROUTER_URL

@@ -24,7 +24,7 @@ Plano em fases para a plataforma de montagem de PC. A referência é o OrçaAI
 ## Decisões (recomendações escolhidas)
 
 1. **Sem chaves, tudo funciona.** `LLM_PROVIDER=none` (padrão) usa a heurística determinística
-   para os agentes e a extração; `anthropic` ou `openai` (qualquer API compatível) ligam o LLM.
+   para os agentes e a extração; `anthropic`, `openai` (qualquer API compatível) ou `openrouter` ligam o LLM.
    O padrão garante testes reprodutíveis e demo offline.
 2. **Persistência:** repositório em memória, carregado do seed JSON, é a fonte nos testes e na demo.
    Com `SUPABASE_URL` definido, as builds, os achados e o histórico de preço também são gravados no

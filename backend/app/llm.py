@@ -11,6 +11,7 @@ from .config import get_settings
 from .tracing import span
 
 logger = logging.getLogger(__name__)
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
 
 def ativo() -> bool:
@@ -29,7 +30,8 @@ def _texto(system: str, user: str) -> str:
             raise RuntimeError("recusa do modelo")
         return "".join(b.text for b in r.content if b.type == "text")
     from openai import OpenAI
-    cliente = OpenAI(api_key=s.llm_api_key, base_url=s.llm_base_url or None, timeout=s.llm_timeout_seconds)
+    base_url = s.llm_base_url or (OPENROUTER_URL if s.llm_provider == "openrouter" else None)
+    cliente = OpenAI(api_key=s.llm_api_key, base_url=base_url, timeout=s.llm_timeout_seconds)
     r = cliente.chat.completions.create(model=s.llm_model, temperature=0,
                                         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
     return r.choices[0].message.content or ""
