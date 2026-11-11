@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import agente, exportar, importar, precos, resultado
+from . import agente, alertas, exportar, importar, precos, resultado
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
@@ -282,3 +282,20 @@ def cena(build_id: str, store: Store = Depends(get_store)):
     return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs} for c in comps if c.tipo != "extra"],
             "conflitos": conflitos,
             "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos]}
+
+
+ALERTAS: dict[str, list[alertas.AlertaCriar]] = {}   # ponytail: em memória por usuário; tabela no Supabase quando houver login
+
+
+@app.post("/alertas", response_model=alertas.StatusAlerta)
+def criar_alerta(dados: alertas.AlertaCriar, usuario: str = "demo", store: Store = Depends(get_store)):
+    if dados.componente_id not in store.componentes:
+        raise HTTPException(404, "componente não encontrado")
+    lista = [a for a in ALERTAS.setdefault(usuario, []) if a.componente_id != dados.componente_id]
+    ALERTAS[usuario] = lista + [dados]
+    return alertas.status(store, dados)
+
+
+@app.get("/alertas", response_model=list[alertas.StatusAlerta])
+def ver_alertas(usuario: str = "demo", store: Store = Depends(get_store)):
+    return [alertas.status(store, a) for a in ALERTAS.get(usuario, [])]
