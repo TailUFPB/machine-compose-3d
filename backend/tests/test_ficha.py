@@ -24,6 +24,7 @@ def busca(monkeypatch):
         pedidos.append(json.loads(req.data))
         return io.BytesIO(AMOSTRA)
     monkeypatch.setattr(ficha.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(ficha, "_abrir_pagina", urlopen)   # a página nunca vai à rede nos testes
     monkeypatch.setattr(get_settings(), "serper_api_key", "chave-teste")
     monkeypatch.setattr(get_settings(), "llm_provider", "openai")
     return pedidos
@@ -135,3 +136,42 @@ def test_seed_tem_campos_novos_e_lacunas(store):
                 assert ficha.invalido(c.tipo, campo, c.specs[campo]) is None, (c.id, campo)
     assert store.get("clr-kraken-240").specs["radiador_posicao"] in ("frente", "topo")
     assert all("radiador_posicao" not in c.specs for c in store.por_tipo("cooler") if c.specs["refrigeracao"] == "ar")
+
+
+def _serper_devolve(monkeypatch, corpo):
+    monkeypatch.setattr(ficha.urllib.request, "urlopen", lambda req, timeout: io.BytesIO(json.dumps(corpo).encode()))
+
+
+@pytest.mark.parametrize("comp_id,link", [
+    ("ssd-sn770-1t", "https://www.crowdstrike.com/x"),      # "wd" é substring do host, não o domínio
+    ("rx-6600", "https://amdahl-shop.example.com/x"),
+    ("rx-6600", "http://www.amd.com/x"),                    # sem https
+])
+def test_host_que_so_contem_a_marca_nao_e_o_fabricante(store, busca, monkeypatch, comp_id, link):
+    _serper_devolve(monkeypatch, {"organic": [{"link": link, "title": "t", "snippet": "s"}]})
+    vistos = llm_devolve(monkeypatch, {"fans": 4, "formato": "3.5"})
+    r = ficha.extrair(store, comp_id)
+    assert not r.executou and not r.gravados and not vistos
+    assert not store.componentes[comp_id].specs_origem
+
+
+@pytest.mark.parametrize("corpo", [{"organic": None}, {"organic": ["x"]}, {"organic": "x"}, {}])
+def test_resposta_malformada_da_busca_nao_quebra(store, busca, monkeypatch, corpo):
+    _serper_devolve(monkeypatch, corpo)
+    llm_devolve(monkeypatch, EXTRAIDO)
+    assert not ficha.extrair(store, "rtx-4060-8g").executou
+
+
+def test_formato_tem_de_bater_com_a_interface(store):
+    m2 = next(c for c in store.componentes.values() if c.tipo == "armazenamento" and c.specs.get("interface") == "M.2")
+    r = ficha.gravar(m2, {"formato": "3.5"}, "https://exemplo.com/ficha")
+    assert not r.gravados and r.descartados[0].campo == "formato"
+    assert ficha.gravar(m2, {"formato": "M.2"}, "https://exemplo.com/ficha").gravados == {"formato": "M.2"}
+
+
+def test_redirecionamento_so_para_o_mesmo_host_em_https():
+    h = ficha._SemSairDoHost()
+    req = ficha.urllib.request.Request("https://www.nvidia.com/a")
+    assert h.redirect_request(req, None, 302, "Found", {}, "http://169.254.169.254/latest") is None
+    assert h.redirect_request(req, None, 302, "Found", {}, "https://outro.com/b") is None
+    assert h.redirect_request(req, None, 302, "Found", {}, "https://www.nvidia.com/b") is not None

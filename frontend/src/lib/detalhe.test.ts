@@ -257,3 +257,18 @@ describe("lotes do renderizador", () => {
     }
   });
 });
+
+describe("cooler: heatpipes e fans da ficha", () => {
+  it("usa o número de heatpipes da ficha, cabe no envelope e deixa de ser estimado", () => {
+    for (const heatpipes of [1, 6, 8]) {
+      const m = coolerModelo({ altura_mm: 155, tdp_suportado: 245, heatpipes, fans: 1, fan_mm: 120 });
+      const pipes = m.partes.filter((p) => p.id.startsWith("heatpipe-"));
+      expect(pipes).toHaveLength(heatpipes);
+      expect(pipes.every((p) => p.fonte === "ficha")).toBe(true);
+      expect(m.partes.every((p) => p.pos.every((v, i) => Math.abs(v) + p.tam[i] / 2 <= m.tam[i] / 2 + 0.5))).toBe(true);
+      expect(atravessam(m).filter(([a, b]) => !(a === "aletas" && b.startsWith("heatpipe")))).toEqual([]);
+      expect(m.estimados).toEqual([]);
+    }
+    expect(coolerModelo({ altura_mm: 155 }).estimados).toEqual(["fans", "heatpipes"]);
+  });
+});

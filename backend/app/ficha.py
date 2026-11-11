@@ -90,6 +90,8 @@ def gravar(comp: Componente, campos: dict[str, Any], url: str, agora: datetime |
         motivo = "sem fonte (URL)" if not url else invalido(comp.tipo, campo, valor)
         if not motivo and campo == "radiador_posicao" and comp.specs.get("refrigeracao") != "aio":
             motivo = "só vale para water cooler"
+        if not motivo and campo == "formato" and (valor == "M.2") != (comp.specs.get("interface") == "M.2"):
+            motivo = f"não bate com a interface {comp.specs.get('interface')}"
         if motivo:
             logger.warning("Ficha de %s: %s=%r descartado (%s)", comp.id, campo, valor, motivo)
             r.descartados.append(Descartado(campo=campo, valor=valor, motivo=motivo))
@@ -111,23 +113,43 @@ def _buscar(comp: Componente) -> dict | None:
                                                            "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
-            organicos = json.load(resp).get("organic", [])
+            organicos = json.load(resp).get("organic") or []
     except Exception as exc:
         logger.warning("Serper (ficha) falhou para %s: %s", comp.id, exc)
         return None
+    # Domínio do fabricante: um rótulo do host (fora o TLD) é exatamente a marca. Substring não serve:
+    # "wd" casaria com crowdstrike.com. Marca sem site com o próprio nome fica sem extração.
     marca = _so_alnum(comp.marca)
+    if not marca or not isinstance(organicos, list):
+        return None
     for o in organicos:
+        if not isinstance(o, dict):
+            continue
         url = urlparse(str(o.get("link") or ""))
-        if url.scheme == "https" and marca in _so_alnum(url.hostname or ""):
+        rotulos = [_so_alnum(r) for r in (url.hostname or "").split(".")[:-1]]
+        if url.scheme == "https" and marca in rotulos:
             return o
     return None
+
+
+class _SemSairDoHost(urllib.request.HTTPRedirectHandler):
+    """Só segue redirecionamento https para o mesmo host: a página não pode nos mandar para outro endereço."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        novo, velho = urlparse(newurl), urlparse(req.full_url)
+        if novo.scheme != "https" or novo.hostname != velho.hostname:
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_abrir_pagina = urllib.request.build_opener(_SemSairDoHost).open
 
 
 def _texto_da_pagina(url: str) -> str | None:
     """Texto visível da página. Site de fabricante costuma bloquear robô ou montar a ficha por script: falha = None."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; ficha-tecnica)"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with _abrir_pagina(req, timeout=15) as resp:
             html = resp.read(1_000_000).decode("utf-8", "ignore")
     except Exception as exc:
         logger.info("Página %s não abriu (%s): usando o trecho da busca", url, exc)

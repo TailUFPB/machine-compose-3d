@@ -345,7 +345,8 @@ export function regioesDeConflito(caixas: Caixa[], conflitos: Cena["conflitos"])
       const centro: Vec3 = [...c.pos], tam: Vec3 = [...c.tam];
       tam[k] = Math.min(mm, c.tam[k]);
       centro[k] = s * (borda - tam[k] / 2);
-      achadas.push({ centro, tam, mm });
+      const outro = -s * c.pos[k] + c.tam[k] / 2 - gab.tam[k] / 2;   // passa também pela parede oposta: a medida é a soma
+      achadas.push({ centro, tam, mm: mm + Math.max(0, outro) });
     }
     for (let i = 0; i < pecas.length; i++) for (let j = i + 1; j < pecas.length; j++) {
       const a = pecas[i], b = pecas[j];

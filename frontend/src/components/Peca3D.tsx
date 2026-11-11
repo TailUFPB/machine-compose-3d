@@ -5,7 +5,7 @@
 // o rótulo de cada subpeça sai da faixa de triângulos atingida.
 import { Edges, Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { BoxGeometry, type BufferGeometry, CatmullRomCurve3, CylinderGeometry, EdgesGeometry, ExtrudeGeometry, type Group, Matrix4, MeshLambertMaterial, Path, Shape, TubeGeometry, Vector2, Vector3 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Caixa, Vec3 } from "../lib/cena";
@@ -99,6 +99,7 @@ function Fan({ s, mat, spin }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: T
   const emX = s.forma.eixo === "x";
   const r = s.forma.raio, t = emX ? s.tam[0] : s.tam[1], n = s.forma.pas;
   const pa = useMemo(() => geometriaPa(r), [r]);
+  useEffect(() => () => pa.dispose(), [pa]);
   const ud = { nome: rotulo(s) };
   return (
     <group rotation={emX ? [0, 0, -Math.PI / 2] : [0, 0, 0]}>
@@ -106,7 +107,7 @@ function Fan({ s, mat, spin }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: T
         <torusGeometry args={[r, 1.6, 8, 48]} />
         <Edges color={TINTA} threshold={40} />
       </mesh>
-      <group ref={(g) => { if (g && !spin.current.includes(g)) spin.current.push(g); }}>
+      <group ref={(g) => { if (!g) return; spin.current.push(g); return () => { spin.current = spin.current.filter((x) => x !== g); }; }}>
         <mesh material={mat("mid")} userData={ud}>
           <cylinderGeometry args={[r * 0.32, r * 0.32, t * 0.8, 32]} />
           <Edges color={TINTA} threshold={30} />
@@ -132,6 +133,7 @@ const semRaio = () => null;
 function Parte({ l, mat, spin }: { l: Lote; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]> }) {
   const s = l.subs[0], fan = s.forma.tipo === "fan";
   const m = useMemo(() => (fan ? null : malhaLote(l)), [l, fan]);
+  useEffect(() => () => m?.geo.dispose(), [m]);
   if (!m) return <Fan s={s as Sub & { forma: { tipo: "fan" } }} mat={mat} spin={spin} />;
   // o vidro não intercepta cliques nas peças de dentro
   return (
@@ -165,6 +167,7 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
     Object.assign(m.vidro, { transparent: true, opacity: 0.1, depthWrite: false });
     return m;
   }, []);
+  useEffect(() => () => { for (const m of Object.values(mats)) m.dispose(); }, [mats]);
   const mat = (t: Tom) => mats[t];
   const raiz = useRef<Group>(null);
   const partes = useRef<(Group | null)[]>([]);

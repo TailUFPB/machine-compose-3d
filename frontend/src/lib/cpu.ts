@@ -34,7 +34,7 @@ export function coolerModelo(specs: Record<string, any>): Modelo {
   const h: number = specs.altura_mm ?? 155;
   const fanMm: number = specs.fan_mm ?? (h < 140 ? 92 : 120);
   const nFans: number = specs.fans ?? 1;
-  const nPipes = Math.min(6, Math.max(2, Math.round((specs.tdp_suportado ?? 180) / 55)));
+  const nPipes: number = specs.heatpipes ?? Math.min(6, Math.max(2, Math.round((specs.tdp_suportado ?? 180) / 55)));
   const PILHA = 46, FAN = 25, largura = fanMm + 4;
   const meiaX = PILHA / 2 + FAN;   // envelope simétrico: a base fica no centro, sob a pilha
   const z0 = -h / 2;
@@ -51,7 +51,7 @@ export function coolerModelo(specs: Record<string, any>): Modelo {
   add("aletas", "Pilha de aletas", "metal", [0, 0, zPilha + (n * passo) / 2], [PILHA, largura, n * passo], [0, 0, 0], 2, "estimado", { tipo: "aletas", n, passo, esp: 0.5, eixo: "z" });
   for (let i = 0; i < nPipes; i++) {
     const y = (i - (nPipes - 1) / 2) * 9 + Math.sign(i - (nPipes - 1) / 2) * 22;   // fora da base e do suporte
-    add(`heatpipe-${i}`, "Heatpipe", "cobre", [(i % 2 ? 1 : -1) * 9, y, z0 + 4 + (zPilha + n * passo - z0 - 4) / 2], [6, 6, zPilha + n * passo - z0 - 4], [0, 0, 0], 2, "estimado", { tipo: "cilindro", raio: 3, eixo: "z" });
+    add(`heatpipe-${i}`, "Heatpipe", "cobre", [(i % 2 ? 1 : -1) * 9, y, z0 + 4 + (zPilha + n * passo - z0 - 4) / 2], [6, 6, zPilha + n * passo - z0 - 4], [0, 0, 0], 2, specs.heatpipes == null ? "estimado" : "ficha", { tipo: "cilindro", raio: 3, eixo: "z" });
   }
   add("tampa", "Tampa superior", "lo", [0, 0, h / 2 - 1.5], [PILHA, largura, 3], [0, 0, 32], 0);
   const zFan = h / 2 - 3 - fanMm / 2 - (largura - fanMm) / 2 + 2;
@@ -60,5 +60,5 @@ export function coolerModelo(specs: Record<string, any>): Modelo {
     add(`fan-${i}`, `Fan ${fanMm} mm`, "hi", [lado * (PILHA / 2 + FAN / 2), 0, Math.max(zFan, z0 + 8 + fanMm / 2)], [FAN, fanMm, fanMm], [lado * 62, 0, 0], 1,
       specs.fan_mm == null ? "estimado" : "ficha", { tipo: "fan", raio: fanMm / 2 - 2, pas: 9, eixo: "x" });
   }
-  return { tam: [2 * meiaX, largura, h], partes, estimados: ["fans", "heatpipes"], ancoras: { base: [0, 0, z0] } };
+  return { tam: [2 * meiaX, largura, h], partes, estimados: [...(specs.fans == null || specs.fan_mm == null ? ["fans"] : []), ...(specs.heatpipes == null ? ["heatpipes"] : [])], ancoras: { base: [0, 0, z0] } };
 }

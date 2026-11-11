@@ -51,6 +51,7 @@ function Cabo3D({ c, visivel, reduzido, onHover }: { c: Cabo; visivel: (t: numbe
     return new TubeGeometry(curva, c.pontos.length * 24, c.raio * ESCALA, 8);
   }, [c]);
   const mat = useMemo(() => new MeshLambertMaterial({ color: c.tipo === "mangueira" ? "#141a22" : c.raio > 2 ? "#5d6f86" : "#c8a04c" }), [c]);
+  useEffect(() => () => { geo.dispose(); mat.dispose(); }, [geo, mat]);   // o three não libera sozinho o que vai por prop
   const grupo = useRef<Group>(null);
   useFrame(({ clock }, dt) => {
     const alvo = visivel(clock.elapsedTime) ? 1 : 0;
@@ -234,7 +235,7 @@ export default function Cena3D({ cena }: { cena: Cena }) {
         <div className="acoes">
           <button className="btn" data-testid="tutorial" aria-pressed={tutorial}
             onClick={() => { setTutorial(!tutorial); setPasso(0); setAberta(null); setExplodida(false); setFocado(null); }}>
-            {tutorial ? "Ver montada" : "Passo a passo"}
+            Passo a passo
           </button>
           {!tutorial && (
             <button className="btn" data-testid="explodir" aria-pressed={explodida} onClick={() => { setExplodida(!explodida); setAberta(null); setFocado(null); }}>
@@ -269,7 +270,7 @@ export default function Cena3D({ cena }: { cena: Cena }) {
         </>
       )}
       {tutorial && total > 0 && (
-        <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo].texto}</p>
+        <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
       )}
       <div className="cena" data-testid="cena" data-aberta={alvo?.chave ?? ""}>
         {hover && <span className="etiqueta">{hover}</span>}

@@ -177,7 +177,7 @@ export default function Pagina() {
                 <p className="sub">Peças em escala pela ficha técnica. O que conflita fica em vermelho; o modo passo a passo mostra a ordem de montagem.</p>
               </div>
             </div>
-            <section className="card" aria-label="Cena 3D">{cena ? <Cena3D cena={cena} /> : <span className="carregando" />}</section>
+            <section className="card" aria-label="Cena 3D">{cena ? <Cena3D key={build?.id} cena={cena} /> : <span className="carregando" />}</section>
           </>
         )}
         {fonteDados && <p className="fonte-dados">{fonteDados}</p>}

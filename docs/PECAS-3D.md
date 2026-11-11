@@ -3,6 +3,8 @@
 Cada tipo de peça tem um **gerador**: uma função pura que recebe a ficha (`specs`) e devolve um `Modelo`
 (`frontend/src/lib/peca.ts`). O renderizador (`components/Peca3D.tsx`) e a vista explodida são os mesmos para
 qualquer peça. Prontas: GPU (`lib/gpu.ts`, a referência), placa-mãe (`lib/placa.ts`), memória (`lib/ram.ts`), CPU e cooler a ar (`lib/cpu.ts`), SSD M.2 (`lib/ssd.ts`), fonte e gabinete (`lib/gabinete.ts`).
+Também: water cooler (`lib/aio.ts`, bloco e radiador) e discos SATA (`lib/disco.ts`). A montagem, os cabos, a build
+explodida, as regiões de conflito e o passo a passo ficam em `lib/cena.ts`.
 
 ## Contrato
 
@@ -38,6 +40,7 @@ de usar offsets soltos. Peça nova que se prende a outra declara a âncora dos d
    | Fixação | parafusos de retenção e do shroud | standoffs, travas, presilhas |
    | Acabamento | recortes e ventilação do bracket, tampa do shroud | grades, rótulos, vidro |
 4. **Formas.** Use as primitivas de `Forma`: `caixa`, `tubo`, `cilindro`, `fan`, `aletas`, `placa` (chapa com furos) e
+   `perfil` (polígono extrudado), `curva` (tubo por pontos) e
    `grade` (pinos, contatos e trilhas: toda interface elétrica mostra seus pinos, e todo PCB mostra os barramentos principais).
    Primitiva nova só quando nenhuma combinação dessas resolve, e entra no renderizador, não no gerador.
 5. **Tons.** `lo` carcaça, `mid` estrutura secundária, `hi` parte móvel, `lit` um único destaque por peça,

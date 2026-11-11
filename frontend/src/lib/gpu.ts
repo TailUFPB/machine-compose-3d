@@ -139,7 +139,7 @@ export function gpuModelo(specs: Record<string, any>): Modelo {
   const CH = 4;   // chanfro entre a tampa e as laterais
   const vaoX = [x0 + 6, x1 - 8];
   const passoFan = (vaoX[1] - vaoX[0]) / nFans;
-  const r = Math.min(48, (H - 21) / 2, passoFan / 2 - 3);
+  const r = Math.min(specs.fan_mm ? specs.fan_mm / 2 : 48, (H - 21) / 2, passoFan / 2 - 3);
   const furos = Array.from({ length: nFans }, (_, i) => ({ x: vaoX[0] + passoFan * (i + 0.5), z: 3, r: r + 1.5 }));
   add("shroud", "Shroud (tampa)", "lo", [cx, -T / 2 + 1.5, 0], [cl, 3, H - 2 - 2 * CH], E_SH, 4, "estimado", { tipo: "placa", furos });
   const paredeH = fanT - 3 + finH * 0.5, paredeY = -T / 2 + 3 + paredeH / 2, hy = (3 + paredeH) / 2;
