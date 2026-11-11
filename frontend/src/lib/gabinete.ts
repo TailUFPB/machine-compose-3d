@@ -1,12 +1,13 @@
 // Fonte e gabinete procedurais. Referencial local dos dois: x = profundidade (traseira em +x), y = altura, z = largura.
+// A ficha da fonte segue a norma ATX: `c` (150) é a largura, que fica em z; `l` (140) é a profundidade, em x.
 import type { Vec3 } from "./cena";
 import { type Fonte, type Modelo, type Sub, montador } from "./peca";
 
 /** Fonte ATX/SFX com o fan para baixo: tampa, PCB pendurado com os componentes, fan na chapa de baixo. */
 export function fonteModelo(specs: Record<string, any>): Modelo {
   const d = specs.dimensoes ?? { c: 150, a: 86, l: 140 };
-  const [X, Y, Z]: Vec3 = [d.c, d.a, d.l];
-  const kx = X / 150, ky = Y / 86, kz = Z / 140, k = Math.min(kx, ky, kz);
+  const [X, Y, Z]: Vec3 = [d.l, d.a, d.c];
+  const kx = X / 140, ky = Y / 86, kz = Z / 150, k = Math.min(kx, ky, kz);
   const partes: Sub[] = [], add = montador(partes);
   const t = 1;
 
@@ -50,8 +51,9 @@ export function fonteModelo(specs: Record<string, any>): Modelo {
 /**
  * Gabinete torre: pés, cinco chapas, lateral, filtros, fans, gaiola de discos e cobertura da fonte.
  * Ficha opcional: `posicoes_fan` {frente, topo, traseira}, `lateral` ("vidro" | "chapa") e `baias` {"2.5", "3.5"}.
+ * `ocultar`: ids (ou prefixos de id, até o hífen) de subpeças que a build dispensa: fans no lugar do radiador, tampas de slot da GPU.
  */
-export function gabineteModelo(specs: Record<string, any>, passagens: { x: number; z: number }[] = []): Modelo {
+export function gabineteModelo(specs: Record<string, any>, passagens: { x: number; z: number }[] = [], ocultar: string[] = []): Modelo {
   const d = specs.dimensoes ?? { c: 450, a: 460, l: 230 };
   const [C, A, L]: Vec3 = [d.c, d.a, d.l];
   const partes: Sub[] = [], add = montador(partes);
@@ -85,7 +87,7 @@ export function gabineteModelo(specs: Record<string, any>, passagens: { x: numbe
   add("traseira", "Painel traseiro", "mid", [C / 2 - t / 2, yMeio, 0], [t, alt, L], [100, 0, 0], 2, "ficha");
   // recortes na traseira, alinhados com a placa-mãe (topo a 30 mm) e a fonte (20 mm do chão); só entram se não se pisarem
   const fonteTopo = -A / 2 + 20 + 86 + 4, zMb = -L / 2 + 25;
-  add("recorte-fonte", "Recorte da fonte", "escuro", [C / 2 + 0.1, -A / 2 + 20 + 43, 0], [0.2, 80, Math.min(L - 20, 140)], [100, 0, 0], 2);
+  add("recorte-fonte", "Recorte da fonte", "escuro", [C / 2 + 0.1, -A / 2 + 20 + 43, 0], [0.2, 80, Math.min(L - 20, 150)], [100, 0, 0], 2);
   const ioBaixo = A / 2 - 30 - 14 - 150;
   if (ioBaixo > fonteTopo) add("recorte-io", "Recorte do painel de portas", "escuro", [C / 2 + 0.1, ioBaixo + 75, zMb + 22], [0.2, 150, 42], [100, 0, 0], 2);
   for (let i = 0, y = ioBaixo - 16; i < 7 && y - 7 > fonteTopo; i++, y -= 20.32) {   // tampas de slot: chapa com a fresta de ventilação
@@ -144,5 +146,5 @@ export function gabineteModelo(specs: Record<string, any>, passagens: { x: numbe
     add("cobertura", "Cobertura da fonte", "lo", [cx, fonteTopo + 8, 0], [w, t, p], [0, 0, 0], 4, "estimado", { tipo: "placa", furos });
   }
 
-  return { tam: [C, A, L], partes, estimados, ancoras };
+  return { tam: [C, A, L], partes: partes.filter((p) => !ocultar.some((o) => p.id === o || p.id.startsWith(`${o}-`))), estimados, ancoras };
 }

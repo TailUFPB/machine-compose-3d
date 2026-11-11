@@ -152,10 +152,11 @@ interface Props {
   posicao: (t: number) => Vec3 | null;   // posição montada (tutorial incluso), em mm
   saida: number;                         // quanto a placa sai do gabinete em +Z quando aberta, em mm
   onClick: () => void; onHover: (n: string | null) => void;
-  encaixe?: number;                      // subpeças móveis (travas, alavanca, parafusos): 0 = fechadas (padrão), 1 = abertas
+  moveis?: (t: number) => string[] | undefined;   // prefixos de id das subpeças a que `encaixe` se aplica; ausente = todas
+  encaixe?: number | ((t: number) => number);   // subpeças móveis (travas, alavanca, parafusos): 0 = fechadas (padrão), 1 = abertas
 }
 
-export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0 }: Props) {
+export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0, moveis }: Props) {
   const maxOrdem = Math.max(...modelo.partes.map((p) => p.ordem));
   const grupos = useMemo(() => lotes(modelo.partes), [modelo]);
   const mats = useMemo(() => {
@@ -178,7 +179,7 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
     if (mudou.current.aberto !== aberto) mudou.current = { aberto, t: agora };
     const t = reduzido ? 1e9 : agora - mudou.current.t;
 
-    const base = posicao(agora);
+    const base = posicao(agora), encTodas = typeof encaixe === "function" ? encaixe(agora) : encaixe, quais = moveis?.(agora);
     g.visible = base != null && !oculta;
     if (!base) return;
     // sai do gabinete primeiro, depois as subpeças se afastam
@@ -189,9 +190,10 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
       const o = partes.current[i];
       if (!o) return;
       const k = progressoExplosao(l.ordem, maxOrdem, t - (aberto ? 0.35 : 0), aberto);
+      const enc = !quais || quais.some((q) => l.subs[0].id.startsWith(q)) ? encTodas : 0;
       const d = l.movel?.desloca ?? ZERO, gira = l.movel?.gira;
-      o.position.set(l.pos[0] + l.explode[0] * k + d[0] * encaixe, l.pos[1] + l.explode[1] * k + d[1] * encaixe, l.pos[2] + l.explode[2] * k + d[2] * encaixe);
-      if (gira) o.rotation.set(gira[0] * encaixe, gira[1] * encaixe, gira[2] * encaixe);
+      o.position.set(l.pos[0] + l.explode[0] * k + d[0] * enc, l.pos[1] + l.explode[1] * k + d[1] * enc, l.pos[2] + l.explode[2] * k + d[2] * enc);
+      if (gira) o.rotation.set(gira[0] * enc, gira[1] * enc, gira[2] * enc);
     });
     if (!reduzido) for (const f of spin.current) f.rotation.y += dt * (aberto ? 0.4 : 1.6);
     const pulso = c.conflito && !aberto ? 0.35 + 0.35 * Math.sin(agora * 4) : 0;
@@ -200,7 +202,7 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
 
   const passar = (e: Parameters<typeof nomeEm>[0] & { stopPropagation: () => void }) => { e.stopPropagation(); onHover(aberto ? `${c.nome} · ${nomeEm(e)}` : c.nome); };
   return (
-    <group ref={raiz} scale={escala}
+    <group ref={raiz} scale={escala} rotation={c.rot}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       onPointerOver={passar} onPointerMove={aberto ? passar : undefined}   // numa malha fundida o rótulo muda sem trocar de objeto
       onPointerOut={() => onHover(null)}>

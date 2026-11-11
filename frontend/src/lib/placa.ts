@@ -131,12 +131,13 @@ export function placaMaeModelo(specs: Record<string, any>): Modelo {
 
   // Headers de pinos na borda de baixo e junto da CPU
   header("fan-cpu", "Conector do fan da CPU", cx - 38, cy + 44, 2);   // do lado do fan do cooler
-  header("usb2", "Conector USB 2.0 interno", -W / 2 + 60, -H / 2 + 6, 5);
-  header("painel", "Conector do painel frontal", -W / 2 + 30, -H / 2 + 6, 5);
-  header("audio", "Conector de áudio frontal", W / 2 - 60, -H / 2 + 6, 5);
+  const yb = ff === "ITX" ? H / 2 - 6 : -H / 2 + 6;   // na ITX a GPU cobre a borda de baixo: os conectores vão para a de cima
+  header("usb2", "Conector USB 2.0 interno", -W / 2 + 60, yb, 5);
+  header("painel", "Conector do painel frontal", -W / 2 + 30, yb, 5);
+  header("audio", "Conector de áudio frontal", W / 2 - 60, yb, 5);
   header("fan-sys0", "Conector de fan do sistema 1", -W / 2 + 30, H / 2 - 6, 2);
-  header("fan-sys1", "Conector de fan do sistema 2", -W / 2 + 90, -H / 2 + 6, 2);
-  header("fan-sys2", "Conector de fan do sistema 3", W / 2 - 30, -H / 2 + 6, 2);
+  header("fan-sys1", "Conector de fan do sistema 2", -W / 2 + 90, yb, 2);
+  header("fan-sys2", "Conector de fan do sistema 3", W / 2 - 30, yb, 2);
 
   // Barramentos: trilhas no PCB ligando a CPU às memórias e ao slot PCIe (por último, para não bloquear componentes)
   const trilha = (id: string, nome: string, x0: number, x1: number, y0: number, y1: number, n: Vec3) => {

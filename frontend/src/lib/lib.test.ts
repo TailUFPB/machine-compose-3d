@@ -215,8 +215,9 @@ describe("cabos", () => {
   ] };
   const caixas = montarCena(cena), cabos = montarCabos(caixas);
 
-  it("liga fonte à placa-mãe e à GPU, e o fan do cooler à placa", () => {
-    expect(cabos.map((c) => c.id).sort()).toEqual(["cabo-atx24", "cabo-eps", "cabo-fan-cpu", "cabo-gpu-0", "cabo-gpu-1"]);
+  it("liga fonte à placa-mãe e à GPU; fans e painel frontal à placa", () => {
+    expect(cabos.map((c) => c.id).sort()).toEqual(["cabo-atx24", "cabo-audio", "cabo-eps", "cabo-fan-cpu", "cabo-fan-frontal-0", "cabo-fan-frontal-1",
+      "cabo-fan-traseiro", "cabo-gpu-0", "cabo-gpu-1", "cabo-painel", "cabo-usb2"]);
     const gab = caixas[0];
     for (const c of cabos) for (const p of c.pontos) p.forEach((v, i) => expect(Math.abs(v)).toBeLessThanOrEqual(gab.tam[i] / 2));
     expect(gab.modelo!.partes.find((p) => p.id === "cobertura")!.forma).toMatchObject({ tipo: "placa", furos: { length: 4 } });

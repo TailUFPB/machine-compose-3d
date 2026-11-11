@@ -216,6 +216,20 @@ legend { color: var(--label); }
 .legenda li { display: inline-flex; align-items: center; gap: 6px; }
 .legenda i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .passo { margin-bottom: 12px; }
+.btn[aria-pressed="true"] { background: var(--active); color: #fff; box-shadow: inset 0 0 0 1px var(--hue); }
+.cena-pecas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.cena-pecas .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.cena .medida { position: absolute; top: 0; left: 0; z-index: 1; visibility: hidden; pointer-events: none; padding: 1px 6px; border-radius: 2px; border: 1px solid var(--negative); background: var(--pill-negative-bg);
+  color: var(--pill-negative-ink); font-size: var(--fs-small); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dados-peca { margin-top: 12px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.dados-peca strong { color: var(--label); font-weight: 500; }
+.conflitos { list-style: none; margin: 16px 0 0; padding: 0; }
+.conflitos li + li { border-top: 1px solid var(--rule); }
+.conflito { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; width: 100%; padding: 10px 8px; border: 0; background: none;
+  border-radius: var(--radius-control); text-align: left; cursor: pointer; }
+.conflito:hover, .conflito[aria-current="true"] { background: var(--raised); }
+.conflito > span:nth-child(2) { flex: 1; min-width: 12em; }
+.conflito .medida { color: var(--negative); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fluidez canvas { width: 100%; height: 64px; display: block; background: #0f1822; border-radius: var(--radius-control); }
 .fluidez figcaption { margin-top: 8px; font-size: 13px; color: var(--muted); }
 
