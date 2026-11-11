@@ -10,7 +10,15 @@ import { ramModelo } from "./ram";
 import { ssdModelo } from "./ssd";
 
 export type Vec3 = [number, number, number];
-export interface Caixa { id: string; tipo: Tipo; nome: string; pos: Vec3; tam: Vec3; cor: string; conflito: boolean; passo: number; specs: Record<string, any>; modelo?: Modelo }
+/**
+ * Uma peça posicionada na cena. `id` é o da peça na build (conflitos e legenda usam esse); `chave` é única por caixa,
+ * porque uma peça pode ocupar mais de um lugar (water cooler: bloco e radiador). `instala` é o deslocamento, em mm,
+ * com que a peça sai do lugar na build explodida. `origem` é campo da ficha → URL.
+ */
+export interface Caixa {
+  id: string; chave: string; tipo: Tipo; nome: string; pos: Vec3; tam: Vec3; cor: string; conflito: boolean; passo: number;
+  specs: Record<string, any>; modelo?: Modelo; instala: Vec3; origem: Record<string, string>;
+}
 
 const MARGEM = 30;
 const COR: Partial<Record<Tipo, string>> = {
@@ -23,8 +31,8 @@ export function montarCena(cena: Cena): Caixa[] {
   const emConflito = new Set(cena.conflitos.flatMap((c) => c.itens));
   const ordem = cena.passos.map((p) => p.tipo);
   const caixas: Caixa[] = [];
-  const add = (p: { id: string; tipo: Tipo; nome: string; specs: Record<string, any> }, pos: Vec3, tam: Vec3, modelo?: Modelo) =>
-    caixas.push({ ...p, pos, tam, modelo, cor: COR[p.tipo] ?? "#888", conflito: emConflito.has(p.id), passo: Math.max(0, ordem.indexOf(p.tipo)) });
+  const add = (p: { id: string; tipo: Tipo; nome: string; specs: Record<string, any>; origem?: Record<string, string> }, pos: Vec3, tam: Vec3, modelo?: Modelo) =>
+    caixas.push({ ...p, chave: p.id, instala: [0, 0, 0], origem: p.origem ?? {}, pos, tam, modelo, cor: COR[p.tipo] ?? "#888", conflito: emConflito.has(p.id), passo: Math.max(0, ordem.indexOf(p.tipo)) });
 
   const gab = por("gabinete");
   const d = gab?.specs.dimensoes ?? { c: 450, a: 460, l: 230 };
@@ -89,7 +97,14 @@ export function montarCena(cena: Cena): Caixa[] {
   return caixas;
 }
 
-export interface Cabo { id: string; nome: string; pontos: Vec3[]; raio: number; de: string; para: string; passagem?: { x: number; z: number } }
+/**
+ * `de`/`para` são `id` de peça. `plugues` são as caixas desenhadas nas pontas (centro e tamanho, no mundo).
+ * `passo` é o índice do passo do tutorial em que o cabo é ligado. `tipo` "mangueira" é a do water cooler.
+ */
+export interface Cabo {
+  id: string; nome: string; pontos: Vec3[]; raio: number; de: string; para: string; passagem?: { x: number; z: number };
+  tipo?: "cabo" | "mangueira"; plugues?: { pos: Vec3; tam: Vec3 }[]; passo?: number;
+}
 
 /** Cabos entre os conectores já posicionados: fonte → placa-mãe (ATX 24, EPS) e GPU; fan do cooler → placa-mãe. */
 export function montarCabos(caixas: Caixa[]): Cabo[] {
@@ -151,4 +166,32 @@ export function posicaoTutorial(c: Caixa, passoAtual: number, progresso: number)
   if (c.passo > passoAtual) return null;
   const t = 1 - Math.pow(1 - Math.min(1, Math.max(0, progresso)), 3);   // ease-out
   return [c.pos[0], c.pos[1], c.pos[2] + (1 - t) * 400];
+}
+
+// ---- Contrato da interface (Cena3D). Implementações provisórias: a lógica real entra aqui, sem mudar as assinaturas.
+
+/** Posição da peça na build explodida: `k` de 0 (montada) a 1 (toda afastada na direção de instalação). */
+export function posicaoExplodida(c: Caixa, k: number): Vec3 {
+  return [c.pos[0] + c.instala[0] * k, c.pos[1] + c.instala[1] * k, c.pos[2] + c.instala[2] * k];
+}
+
+/** Região de um conflito físico no mundo (mm): caixa a destacar e quanto a peça passa do limite (null se não se aplica). */
+export interface Regiao { conflitoId: string; centro: Vec3; tam: Vec3; excessoMm: number | null; texto: string }
+
+/** Só conflitos físicos com região calculável entram; os demais continuam marcados apenas na peça. */
+export function regioesDeConflito(_caixas: Caixa[], _conflitos: Cena["conflitos"]): Regiao[] {
+  return [];
+}
+
+/** Estado da cena num passo do tutorial: por `chave`, posição (null = ainda não entrou) e abertura dos encaixes (0–1); ids dos cabos já ligados. */
+export interface EstadoPasso { pecas: Record<string, { pos: Vec3 | null; encaixe: number }>; cabos: string[] }
+
+/** Função pura de (passo, progresso 0–1): avançar e voltar para o mesmo passo dão o mesmo estado. */
+export function estadoPasso(caixas: Caixa[], _cabos: Cabo[], passo: number, progresso: number): EstadoPasso {
+  return { pecas: Object.fromEntries(caixas.map((c) => [c.chave, { pos: posicaoTutorial(c, passo, progresso), encaixe: 0 }])), cabos: [] };
+}
+
+/** Descrição textual da cena para leitor de tela: peças, onde ficam e conflitos. */
+export function descricaoCena(cena: Cena, _caixas: Caixa[], _regioes: Regiao[]): string {
+  return `Montagem com ${cena.pecas.length} peças e ${cena.conflitos.length} conflitos.`;
 }
