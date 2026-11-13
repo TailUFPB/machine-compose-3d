@@ -16,7 +16,7 @@ from .config import get_settings
 from .fps import estimar_build
 from .modelos import Aplicar, Build, BuildCriar, BuildItem, Exportar, Importar, ItemAdicionar, ItemAtualizar, Troca
 from .store import Store, get_store
-from .tracing import trace
+from .tracing import sem_rastro, trace
 
 CONFIRMACAO_OVERRIDE = "EXPORTAR MESMO ASSIM"
 
@@ -295,10 +295,30 @@ PASSOS = [("cpu", "Encaixe a CPU no socket da placa-mãe (alinhe o triângulo)."
 def cena(build_id: str, store: Store = Depends(get_store)):
     """Dados para a cena 3D paramétrica: fichas, peças em conflito físico e passos do tutorial."""
     b = _build(store, build_id)
-    comps = [store.componentes[i.componente_id] for i in b.itens if i.componente_id in store.componentes]
+    return _dados_cena(store, b.itens, b.achados)
+
+
+@app.post("/builds/{build_id}/cena/previa")
+def cena_previa(build_id: str, dados: Troca, store: Store = Depends(get_store)):
+    """Prévia de troca: a cena da build com `para` no lugar de `de`, sem gravar nada (nem build, nem achados, nem
+    espelho), sem LLM e sem rastro. `diferenca_preco` é None quando uma das duas peças não tem preço com fonte."""
+    b = _build(store, build_id)
+    try:
+        itens = itens_trocados(store, b, dados.de, dados.para)
+    except TrocaInvalida as e:
+        raise HTTPException(e.status, e.mensagem)
+    with sem_rastro():   # inclui a pesquisa de preço da candidata (cache compartilhado; a build não é tocada)
+        achados = revisar_build(store, b, itens, llm=False)
+        sem_preco = precos.preco_ref(store, dados.de) is None or precos.preco_ref(store, dados.para) is None
+        diferenca = None if sem_preco else round(agente.custo(store, itens) - agente.custo(store, b.itens), 2)
+    return {**_dados_cena(store, itens, achados), "diferenca_preco": diferenca}
+
+
+def _dados_cena(store: Store, itens: list[BuildItem], achados: list) -> dict:
+    comps = [store.componentes[i.componente_id] for i in itens if i.componente_id in store.componentes]
     tipos = {c.tipo for c in comps}
     conflitos = [{"id": a.id, "itens": a.itens_envolvidos, "descricao": a.descricao, "severidade": a.severidade}
-                 for a in b.achados if a.status == "aberto" and (a.fisico or a.severidade == "bloqueante") and a.itens_envolvidos]
+                 for a in achados if a.status == "aberto" and (a.fisico or a.severidade == "bloqueante") and a.itens_envolvidos]
     return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs,
                        "origem": {campo: o["url"] for campo, o in c.specs_origem.items() if o.get("url")}}   # ausente = seed/estimado
                       for c in comps if c.tipo != "extra"],
