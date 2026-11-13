@@ -9,11 +9,12 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import agente, exportar, ficha, importar, precos, resultado
+from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
 from .fps import estimar_build
-from .modelos import Aplicar, Build, BuildCriar, BuildItem, Exportar, Importar, ItemAdicionar, ItemAtualizar
+from .modelos import Aplicar, Build, BuildCriar, BuildItem, Exportar, Importar, ItemAdicionar, ItemAtualizar, Troca
 from .store import Store, get_store
 from .tracing import trace
 
@@ -132,6 +133,17 @@ def adicionar_item(build_id: str, item: ItemAdicionar, store: Store = Depends(ge
     if item.componente_id not in store.componentes:
         raise HTTPException(404, "componente não encontrado")
     _por_no_lugar(store, b, BuildItem(**item.model_dump(), origem="usuario"))
+    return _revisar_e_salvar(store, b)
+
+
+@app.post("/builds/{build_id}/trocar", response_model=Build)
+def trocar(build_id: str, dados: Troca, store: Store = Depends(get_store)):
+    """Aplicar troca: substitui exatamente a peça `de` por `para` (qualquer tipo) numa única gravação."""
+    b = _build(store, build_id)
+    try:
+        b.itens = itens_trocados(store, b, dados.de, dados.para)
+    except TrocaInvalida as e:
+        raise HTTPException(e.status, e.mensagem)
     return _revisar_e_salvar(store, b)
 
 
