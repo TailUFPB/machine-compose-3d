@@ -83,12 +83,12 @@ def consolidar(store: Store, build: Build, achados: list[Achado]) -> list[Achado
     return sorted(lista, key=lambda a: (PESO[a.severidade], a.agente, a.id))
 
 
-def revisar_build(store: Store, build: Build, itens: list[BuildItem] | None = None) -> list[Achado]:
+def revisar_build(store: Store, build: Build, itens: list[BuildItem] | None = None, llm: bool = True) -> list[Achado]:
     itens = build.itens if itens is None else itens
     alvo = build if itens is build.itens else build.model_copy(update={"itens": itens})
     with span("revisao_camada1"):
         c1 = regras.avaliar(store, itens)
-    c2 = revisores.revisar(store, itens)
+    c2 = revisores.revisar(store, itens, llm=llm)
     with span("consolidador"):
         return consolidar(store, alvo, c1 + c2)
 

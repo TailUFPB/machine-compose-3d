@@ -268,3 +268,25 @@ legend { color: var(--label); }
   .btn.pequeno, .btn.texto { height: 36px; }
   .segmentado button { height: 38px; }
 }
+
+/* Prévia de troca na cena: a troca ainda não foi aplicada */
+.selo-previa { position: absolute; top: 12px; right: 12px; z-index: 1; background: var(--pill-warning-bg); color: var(--pill-warning-ink); padding: 4px 10px; border-radius: var(--radius-control); font-size: var(--fs-small); font-weight: 600; pointer-events: none; }
+
+/* Aba 3D: cena com o painel da build ao lado (abaixo em telas menores) */
+.cena-com-painel { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.painel-peca { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.painel-peca .painel-titulo { font-size: var(--fs-section); color: #fff; margin: 4px 0 0; }
+.painel-peca h3 { font-size: var(--fs-small); text-transform: uppercase; letter-spacing: .04em; color: var(--label); margin-top: 8px; }
+.painel-peca .lista > li { cursor: pointer; }
+.painel-peca .ficha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin: 0; }
+.painel-peca .ficha dt { font-size: var(--fs-small); color: var(--muted); }
+.painel-peca .ficha dd { margin: 0; }
+.painel-peca .acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.ofertas-peca { display: grid; gap: 4px; }
+.ofertas-peca .sub { display: block; }
+@media (max-width: 1100px) { .cena-com-painel { grid-template-columns: minmax(0, 1fr); } }
+.painel-peca .trocar { display: grid; gap: 8px; }
+.painel-peca .candidatas { max-height: 260px; overflow-y: auto; }
+.painel-peca .candidata { text-align: left; white-space: normal; height: auto; min-height: 32px; }
+.painel-peca .candidata[aria-pressed="true"] { color: var(--hue); }
+.painel-peca .diferenca { display: grid; gap: 6px; padding: 12px; border-radius: var(--radius-control); background: var(--raised); }

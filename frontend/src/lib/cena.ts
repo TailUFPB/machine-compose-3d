@@ -373,6 +373,22 @@ export function regioesDeConflito(caixas: Caixa[], conflitos: Cena["conflitos"])
   });
 }
 
+/** Centro e maior lado do envelope que cobre as caixas (enquadramento da câmera). */
+export function envelope(cs: { pos: Vec3; tam: Vec3 }[]): { centro: Vec3; maior: number } {
+  const lo = [0, 1, 2].map((i) => Math.min(...cs.map((c) => c.pos[i] - c.tam[i] / 2)));
+  const hi = [0, 1, 2].map((i) => Math.max(...cs.map((c) => c.pos[i] + c.tam[i] / 2)));
+  return { centro: lo.map((v, i) => (v + hi[i]) / 2) as Vec3, maior: Math.max(...lo.map((v, i) => hi[i] - v)) };
+}
+
+/** Para onde a câmera olha na prévia de troca: a região do conflito que envolve a candidata, se houver; senão a
+ *  própria candidata (todas as caixas dela: o water cooler ocupa duas); null se ela não está na cena. */
+export function focoDaPrevia(caixas: Caixa[], regioes: Regiao[], conflitos: Cena["conflitos"], para: string): { centro: Vec3; maior: number } | null {
+  const r = regioes.find((x) => conflitos.some((c) => c.id === x.conflitoId && c.itens.includes(para)));
+  if (r) return { centro: r.centro, maior: Math.max(...r.tam) };
+  const dela = caixas.filter((c) => c.id === para);
+  return dela.length ? envelope(dela) : null;
+}
+
 /**
  * Estado da cena num passo do tutorial: por `chave`, posição (null = ainda não entrou) e abertura dos encaixes (0–1);
  * ids dos cabos já ligados. `moveis`: prefixos de id das subpeças móveis a que `encaixe` se aplica (ausente = todas).

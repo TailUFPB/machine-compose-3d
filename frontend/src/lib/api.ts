@@ -52,6 +52,9 @@ export interface Cena {
   passos: { tipo: Tipo; texto: string }[];
 }
 
+/** Cena de uma troca ainda não aplicada (`POST /builds/{id}/cena/previa`). `diferenca_preco`: null sem preço com fonte. */
+export type CenaPrevia = Cena & { diferenca_preco: number | null };
+
 export class ErroApi extends Error {
   constructor(public status: number, public detalhe: any) {
     super(typeof detalhe === "string" ? detalhe : detalhe?.mensagem ?? `erro ${status}`);
@@ -96,6 +99,8 @@ export const api = {
     req<{ a: Estimativa[]; b: Estimativa[]; custo_a: number; custo_b: number }>(`/comparar?a=${a}&b=${b}&resolucao=${resolucao}`),
   resultado: (id: string) => req<Resultado>(`/builds/${id}/resultado`),
   cena: (id: string) => req<Cena>(`/builds/${id}/cena`),
+  trocar: (id: string, de: string, para: string) => post<Build>(`/builds/${id}/trocar`, { de, para }),
+  previa: (id: string, de: string, para: string) => post<CenaPrevia>(`/builds/${id}/cena/previa`, { de, para }),
   async exportar(id: string, override = false, confirmacao = ""): Promise<Blob> {
     const r = await fetch(`${API}/builds/${id}/exportar`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ override, confirmacao }),

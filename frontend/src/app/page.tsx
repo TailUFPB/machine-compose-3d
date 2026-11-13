@@ -1,11 +1,14 @@
 "use client";
 import dynamic from "next/dynamic";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Entrada, ErroBloco, Jogos, type Metas, Montagem, PropostaCard, ResultadoPainel, Revisao, useAcao, VisaoGeral,
 } from "@/components/Paineis";
-import { api, type Build, type Cena, type Componente, type Proposta } from "@/lib/api";
+import { api, type Build, type Cena, type CenaPrevia, type Componente, ErroApi, type Proposta } from "@/lib/api";
+import { ultimaVence } from "@/lib/painel";
 import { MODOS, rotuloBuild } from "@/lib/formato";
+
+import PainelPeca, { idDaChave } from "@/components/PainelPeca";
 
 const Cena3D = dynamic(() => import("@/components/Cena3D"), { ssr: false, loading: () => <span className="carregando" /> });
 
@@ -61,6 +64,13 @@ export default function Pagina() {
   const [tentativa, setTentativa] = useState(0);
   const [cena, setCena] = useState<Cena | null>(null);
   const [proposta, setProposta] = useState<Proposta | null>(null);
+  const [aberta, setAberta] = useState<string | null>(null);       // peça aberta, comum à cena e ao painel
+  const [destaque, setDestaque] = useState<string | null>(null);   // peça sob o mouse, na lista ou na cena
+  // Prévia de troca: nunca grava; a última candidata pedida vence (respostas atrasadas são ignoradas)
+  const [previa, setPrevia] = useState<{ de: string; para: string; cena: CenaPrevia } | null>(null);
+  const [pedindo, setPedindo] = useState<{ de: string; para: string } | null>(null);
+  const [erroPrevia, setErroPrevia] = useState<string | null>(null);
+  const senhaPrevia = useRef(ultimaVence());
   const agenteAcao = useAcao();
 
   useEffect(() => {
@@ -86,7 +96,37 @@ export default function Pagina() {
   useEffect(() => {
     if (build && vista === "3d") api.cena(build.id).then(setCena).catch(() => setCena(null));
   }, [vista, build?.id, assinatura]);
-  useEffect(() => setProposta(null), [build?.id]);
+  useEffect(() => { setProposta(null); setAberta(null); setDestaque(null); }, [build?.id]);
+
+  const mensagem = (e: unknown) => (e instanceof ErroApi || e instanceof Error ? e.message : String(e));
+  const pedirPrevia = useCallback((de: string, para: string) => {
+    if (!build) return;
+    const n = senhaPrevia.current.pedir();
+    setPedindo({ de, para }); setErroPrevia(null);
+    api.previa(build.id, de, para)
+      .then((c) => { if (senhaPrevia.current.vale(n)) { setPrevia({ de, para, cena: c }); setPedindo(null); } })
+      .catch((e) => { if (senhaPrevia.current.vale(n)) { setErroPrevia(mensagem(e)); setPedindo(null); } });
+  }, [build?.id]);
+  const cancelarPrevia = useCallback(() => { senhaPrevia.current.pedir(); setPrevia(null); setPedindo(null); }, []);
+  const aplicarTroca = useCallback(async () => {
+    if (!build || !previa) return;
+    try {
+      const b = await api.trocar(build.id, previa.de, previa.para);
+      cancelarPrevia(); atualizar(b); setAberta(previa.para);
+    } catch (e) { setErroPrevia(mensagem(e)); }
+  }, [build?.id, previa]);
+  // a build mudou (aqui ou em outra aba) ou a aba 3D saiu de cena: a prévia não vale mais
+  useEffect(() => { cancelarPrevia(); setErroPrevia(null); }, [build?.id, assinatura, vista]);
+  useEffect(() => {   // a peça aberta deixou de ser a que está sendo trocada (voltar à lista, clique fora): prévia órfã
+    const de = previa?.de ?? pedindo?.de;
+    if (de && idDaChave(aberta) !== de) cancelarPrevia();
+  }, [aberta]);
+  useEffect(() => {   // na prévia, Esc cancela (a cena não fecha a peça aberta por baixo)
+    if (!previa && !pedindo) return;
+    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") cancelarPrevia(); };
+    addEventListener("keydown", tecla);
+    return () => removeEventListener("keydown", tecla);
+  }, [previa, pedindo]);
 
   const navegar = ir;
   const rotulo = (b: Build) => `${rotuloBuild(b)} · ${MODOS[b.modo].nome}`;
@@ -177,7 +217,18 @@ export default function Pagina() {
                 <p className="sub">Peças em escala pela ficha técnica. O que conflita fica em vermelho; o modo passo a passo mostra a ordem de montagem.</p>
               </div>
             </div>
-            <section className="card" aria-label="Cena 3D">{cena ? <Cena3D key={build?.id} cena={cena} /> : <span className="carregando" />}</section>
+            <section className="card cena-com-painel" aria-label="Cena 3D">
+              {cena ? (
+                <>
+                  <Cena3D key={build?.id} cena={previa?.cena ?? cena} aberta={aberta} onAberta={setAberta} destaque={destaque}
+                    onDestaque={setDestaque} previa={previa && { para: previa.para }} escNoPainel={!!(previa || pedindo)} />
+                  <PainelPeca build={build} catalogo={catalogo} cena={cena} aberta={aberta} onAberta={setAberta}
+                    destaque={destaque} onDestaque={setDestaque} onBuild={atualizar}
+                    previa={previa} pedindo={pedindo} erroPrevia={erroPrevia}
+                    onPrevia={pedirPrevia} onCancelarPrevia={cancelarPrevia} onAplicarTroca={aplicarTroca} />
+                </>
+              ) : <span className="carregando" />}
+            </section>
           </>
         )}
         {fonteDados && <p className="fonte-dados">{fonteDados}</p>}

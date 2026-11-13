@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Cena } from "./api";
-import { type Cabo, type Caixa, type Vec3, descricaoCena, estadoPasso, foraDoGabinete, montarCabos, montarCena, noMundo, posicaoExplodida, regioesDeConflito } from "./cena";
+import { type Cabo, type Caixa, type Vec3, descricaoCena, estadoPasso, focoDaPrevia, foraDoGabinete, montarCabos, montarCena, noMundo, posicaoExplodida, regioesDeConflito } from "./cena";
 
 type Peca = Cena["pecas"][number];
 const p = (id: string, tipo: Peca["tipo"], specs: Record<string, any>, nome = id): Peca => ({ id, tipo, nome, specs });
@@ -308,5 +308,30 @@ describe("região de conflito pelo limite da ficha", () => {
     expect(r.excessoMm).toBe(10);
     expect(r.tam[0]).toBe(10);
     expect(r.centro[0] - r.tam[0] / 2).toBeCloseTo(gpu.pos[0] - gpu.tam[0] / 2, 5);   // na ponta da frente da GPU
+  });
+});
+
+describe("focoDaPrevia", () => {
+  // GPU de 420 mm não cabe na torre média (430 de comprimento externo, com margem): conflito físico com região
+  const longa = { ...gpu(420, 3), id: "gpu2" };
+  const c: Cena = { ...cena(media, placa("ATX"), cpu, ar, ram(34), longa, psu, m2),
+    conflitos: [{ id: "par:gpu_comprimento:case+gpu2", itens: ["gpu2", "case"], descricao: "GPU não cabe", severidade: "bloqueante" }] };
+  const caixas = montarCena(c), regioes = regioesDeConflito(caixas, c.conflitos);
+
+  it("vai para a região do conflito que envolve a candidata", () => {
+    const r = regioes.find((x) => x.conflitoId === "par:gpu_comprimento:case+gpu2")!;
+    expect(r).toBeDefined();
+    expect(focoDaPrevia(caixas, regioes, c.conflitos, "gpu2")).toEqual({ centro: r.centro, maior: Math.max(...r.tam) });
+  });
+
+  it("sem conflito da candidata, enquadra a própria peça", () => {
+    const ram34 = de(caixas, "ram");
+    const f = focoDaPrevia(caixas, regioes, c.conflitos, "ram")!;
+    perto(f.centro, ram34.pos);
+    expect(f.maior).toBeCloseTo(Math.max(...ram34.tam), 5);
+  });
+
+  it("candidata fora da cena devolve null", () => {
+    expect(focoDaPrevia(caixas, regioes, c.conflitos, "nao-existe")).toBeNull();
   });
 });
