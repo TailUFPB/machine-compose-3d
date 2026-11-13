@@ -1,7 +1,7 @@
 "use client";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-  type Achado, api, type Build, type Componente, ErroApi, type Estimativa, type Importacao, type Modo, type Objetivos,
+  type Achado, api, type Build, type Componente, ehOfertaUnica, ErroApi, type Estimativa, type Importacao, linkOferta, type Modo, type Objetivos,
   type Proposta, type Resultado, type ResultadoPreco, type Tipo,
 } from "@/lib/api";
 import { brl, brlRedondo, MODOS, SEVERIDADE, TIPOS } from "@/lib/formato";
@@ -29,6 +29,11 @@ export function ErroBloco({ erro, onTentar }: { erro: string | null; onTentar?: 
 
 function Preco({ v, className }: { v: number | null | undefined; className?: string }) {
   return v == null ? <span className="vazio">sem preço</span> : <span className={`num ${className ?? ""}`}>{brl(v)}</span>;
+}
+
+function SeloOfertaUnica({ qtdLojas }: { qtdLojas?: number | null }) {
+  if (!ehOfertaUnica(qtdLojas)) return null;
+  return <span className="pill aviso" title="Apenas 1 loja encontrada nesta busca">1 loja</span>;
 }
 
 export function useAcao() {
@@ -121,7 +126,9 @@ export function PropostaCard({ proposta, catalogo, onAplicar, onDescartar, ocupa
     <section className="card proposta" aria-labelledby="proposta-titulo">
       <div className="card-topo">
         <h2 id="proposta-titulo">Proposta do agente</h2>
-        <span className="meta num">{brl(proposta.custo_estimado)} · {proposta.tentativas} {proposta.tentativas === 1 ? "rodada" : "rodadas"} de revisão</span>
+        <span className="meta num">
+          {brl(proposta.custo_estimado)} (mediana){proposta.custo_minimo != null && ` · menor: ${brl(proposta.custo_minimo)}`} · {proposta.tentativas} {proposta.tentativas === 1 ? "rodada" : "rodadas"} de revisão
+        </span>
       </div>
       {proposta.avisos.map((a) => <p key={a} className="aviso-bloco">{a}</p>)}
       <ul className="lista">
@@ -130,7 +137,7 @@ export function PropostaCard({ proposta, catalogo, onAplicar, onDescartar, ocupa
           return (
             <li key={i.componente_id}>
               <span className="linha1">{c?.nome ?? i.componente_id}{i.travado && <span className="muted"> · travada</span>}</span>
-              <span className="dir"><Preco v={c?.preco.min} /></span>
+              <span className="dir"><Preco v={c?.preco.med} />{c?.preco.min != null && <small>mín {brl(c.preco.min)}</small>}</span>
               {i.justificativa && <span className="linha2">{i.justificativa}</span>}
             </li>
           );
@@ -250,7 +257,7 @@ export function VisaoGeral({ build, catalogo, ir, agente }: {
   }, [build.id, assinatura, tentativa]);
 
   const partes: Parte[] = res
-    ? Object.values(res.lojas).flat().map((l) => ({ id: l.componente_id, tipo: catalogo[l.componente_id]?.tipo ?? "extra", nome: l.nome, valor: l.subtotal }))
+    ? Object.values(res.lojas).flat().map((l) => ({ id: l.componente_id, tipo: catalogo[l.componente_id]?.tipo ?? "extra", nome: l.nome, valor: l.subtotal_ref }))
         .sort((a, b) => b.valor - a.valor)
     : [];
   const abertos = build.achados.filter((a) => a.status === "aberto");
@@ -292,9 +299,12 @@ export function VisaoGeral({ build, catalogo, ir, agente }: {
 
       <div className="kpis" aria-label="Resumo da build">
         <div className="kpi">
-          <span className="rotulo">Total</span>
+          <span className="rotulo">Total (mediana)</span>
           <span className={`valor resposta ${res && !res.cabe ? "neg" : ""}`}>{res ? brl(res.total) : <span className="vazio">-</span>}</span>
-          <span className="nota num">de {brl(build.orcamento)}{res && (res.cabe ? `, sobram ${brl(res.diferenca)}` : `, passa ${brl(-res.diferenca)}`)}</span>
+          <span className="nota num">
+            de {brl(build.orcamento)}{res && (res.cabe ? `, sobram ${brl(res.diferenca)}` : `, passa ${brl(-res.diferenca)}`)}
+            {res && res.total_minimo > 0 && <><br />Menor nas lojas: {brl(res.total_minimo)}</>}
+          </span>
         </div>
         <div className="kpi">
           <span className="rotulo">Jogo mais pesado</span>
@@ -410,7 +420,7 @@ export function Montagem({ build, catalogo, onBuild, agente }: {
           {build.itens.length === 0 && <p className="vazio-bloco">Nenhuma peça. Adicione ao lado, importe uma lista ou use o agente.</p>}
           <div className="rolagem">
             <table>
-              {build.itens.length > 0 && <thead><tr><th>Peça</th><th className="num">Menor preço</th><th className="num">Qtd</th><th>Travada</th><th>Já tenho</th><th><span className="sr">Ações</span></th></tr></thead>}
+              {build.itens.length > 0 && <thead><tr><th>Peça</th><th className="num">Mediana</th><th className="num">Qtd</th><th>Travada</th><th>Já tenho</th><th><span className="sr">Ações</span></th></tr></thead>}
               <tbody>
                 {build.itens.map((i) => {
                   const c = catalogo[i.componente_id];
@@ -420,7 +430,11 @@ export function Montagem({ build, catalogo, onBuild, agente }: {
                         {nome(i.componente_id)}
                         <span className="sub">{TIPOS[c?.tipo ?? "extra"]}{i.origem === "agente" && " · escolhida pelo agente"}</span>
                       </td>
-                      <td className="num"><Preco v={c?.preco.min} /></td>
+                      <td className="num">
+                        <Preco v={c?.preco.med} />
+                        {c?.preco.min != null && <span className="sub">mín {brl(c.preco.min)}</span>}
+                        {ehOfertaUnica(c?.preco.qtd_lojas) && <span className="sub"><SeloOfertaUnica qtdLojas={c?.preco.qtd_lojas} /></span>}
+                      </td>
                       <td className="num">
                         <input type="number" min={1} max={8} value={i.quantidade} style={{ width: 60, height: 32 }} aria-label={`Quantidade de ${nome(i.componente_id)}`}
                           onChange={(e) => mudar(i.componente_id, { quantidade: +e.target.value })} />
@@ -457,7 +471,7 @@ export function Montagem({ build, catalogo, onBuild, agente }: {
                       : <button className="btn pequeno" disabled={ocupado} onClick={() => rodar(async () => onBuild(await api.adicionar(build.id, c.id)))} aria-label={`Adicionar ${c.nome}`}>Adicionar</button>}
                   </span>
                   <span className="linha2">
-                    {c.preco.min != null && "a partir de "}<Preco v={c.preco.min} />{c.preco.confianca && ` · confiança ${c.preco.confianca}`}
+                    <Preco v={c.preco.med} />{c.preco.min != null && ` · mín ${brl(c.preco.min)}`}{c.preco.confianca && ` · confiança ${c.preco.confianca}`}{ehOfertaUnica(c.preco.qtd_lojas) && <>{" "}<SeloOfertaUnica qtdLojas={c.preco.qtd_lojas} /></>}
                     {!c.compativel && <span className="neg"><br />Incompatível: {c.motivo}</span>}
                   </span>
                 </li>
@@ -658,7 +672,12 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
         <div>
           <h1>Compra</h1>
           <p className="sub">
-            {res ? <>{res.cabe ? <>Total <strong className="num">{brl(res.total)}</strong>, sobram {brl(res.diferenca)}.</> : <>Total <strong className="num neg">{brl(res.total)}</strong>, passa {brl(-res.diferenca)} do orçamento.</>} Frete {res.frete}.</> : "Carregando o plano de compra."}
+            {res ? (
+              <>
+                {res.cabe ? <>Referência (mediana) <strong className="num">{brl(res.total)}</strong>, sobram {brl(res.diferenca)}.</> : <>Referência (mediana) <strong className="num neg">{brl(res.total)}</strong>, passa {brl(-res.diferenca)} do orçamento.</>}
+                {" "}Nas lojas mais baratas (por conta e risco): <strong className="num">{brl(res.total_minimo)}</strong>. Frete {res.frete}.
+              </>
+            ) : "Carregando o plano de compra."}
           </p>
         </div>
         <div className="acoes"><BotaoExportar build={build} primario /></div>
@@ -666,7 +685,7 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
       <ErroBloco erro={erro} />
       <div className="duas">
         <section className="card" aria-labelledby="plano-titulo">
-          <div className="card-topo"><h2 id="plano-titulo">Onde comprar</h2><span className="meta">Mais barato com fonte, por loja</span></div>
+          <div className="card-topo"><h2 id="plano-titulo">Onde comprar</h2><span className="meta">Lojas mais baratas com fonte (por conta e risco)</span></div>
           {!res && <span className="carregando" />}
           {res && Object.keys(res.lojas).length === 0 && <p className="vazio-bloco">Nenhuma peça com preço ainda.</p>}
           {res && Object.entries(res.lojas).map(([loja, linhas], k) => (
@@ -676,7 +695,10 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
                 <tbody>
                   {linhas.map((l) => (
                     <tr key={l.componente_id}>
-                      <td><a href={l.url} target="_blank" rel="noreferrer">{l.nome}</a><span className="sub">confiança {l.confianca ?? "-"}</span></td>
+                      <td>
+                        <a href={linkOferta(l.componente_id, loja, l.url)} target="_blank" rel="noreferrer">{l.nome}</a>
+                        <span className="sub">confiança {l.confianca ?? "-"}{ehOfertaUnica(l.qtd_lojas) && <>{" "}<SeloOfertaUnica qtdLojas={l.qtd_lojas} /></>}</span>
+                      </td>
                       <td className="num">{l.quantidade}</td>
                       <td className="num muted">{brl(l.faixa[0])} a {brl(l.faixa[2])}</td>
                       <td className="num">{brl(l.subtotal)}</td>
@@ -687,6 +709,21 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
             </div>
           ))}
           {res && res.sem_preco.length > 0 && <p className="aviso-bloco" style={{ marginTop: 16 }}>Sem preço com fonte: {res.sem_preco.join(", ")}.</p>}
+          {res && res.alternativas_sem_preco.length > 0 && (
+            <ul className="lista" style={{ marginTop: 12 }}>
+              {res.alternativas_sem_preco.map((alt) => (
+                <li key={`${alt.de_id}-${alt.para_id}`}>
+                  <span className="linha1">Sugestão com preço: {alt.para_nome}</span>
+                  <span className="dir">
+                    <button className="btn pequeno" disabled={ocupado} onClick={() => rodar(async () => onBuild(await api.trocarSemPreco(build.id, alt.de_id, alt.para_id)))}>
+                      Trocar
+                    </button>
+                  </span>
+                  <span className="linha2">Substitui {alt.de_nome} · mediana {brl(alt.preco_med)} (mín {brl(alt.preco_min)}) · {alt.qtd_lojas} {alt.qtd_lojas === 1 ? "loja" : "lojas"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="card" aria-labelledby="trocas-titulo">
@@ -713,8 +750,8 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
               {precos.map((p) => (
                 <tr key={p.componente_id}>
                   <td>{nome(p.componente_id)}{p.do_cache && <span className="sub">guardado{p.vencido && ", vencido"}</span>}</td>
-                  <td>{p.ofertas.length ? p.ofertas.map((o) => <div key={o.url + o.loja + o.preco}><a href={o.url} target="_blank" rel="noreferrer">{o.loja}</a> <span className="num">{brl(o.preco)}</span></div>) : <span className="vazio">-</span>}</td>
-                  <td className="num">{p.preco_min != null ? `${brl(p.preco_min)} a ${brl(p.preco_max)}` : <span className="vazio">-</span>}<span className="sub">confiança {p.confianca ?? "-"}</span></td>
+                  <td>{p.ofertas.length ? p.ofertas.map((o) => <div key={o.url + o.loja + o.preco}><a href={linkOferta(p.componente_id, o.loja, o.url)} target="_blank" rel="noreferrer">{o.loja}</a> <span className="num">{brl(o.preco)}</span></div>) : <span className="vazio">-</span>}</td>
+                  <td className="num">{p.preco_min != null ? `${brl(p.preco_min)} a ${brl(p.preco_max)}` : <span className="vazio">-</span>}<span className="sub">confiança {p.confianca ?? "-"}{ehOfertaUnica(p.qtd_lojas) && <>{" "}<SeloOfertaUnica qtdLojas={p.qtd_lojas} /></>}</span></td>
                   <td className="num">
                     {p.descartes.length ? (
                       <details>
