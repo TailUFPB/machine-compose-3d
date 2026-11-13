@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from app import precos
 
 
@@ -61,3 +63,70 @@ def test_cache_sete_dias_e_reserva_vencida(store):
 def test_historico_ordenado(store):
     h = precos.historico(store, "rx-7600")
     assert len(h) >= 8 and h == sorted(h, key=lambda x: x["coletado_em"])
+
+
+@pytest.mark.parametrize("cid, titulo, esperado", [
+    ("rtx-4060-8g", "Placa Vídeo Gigabyte Geforce Rtx4060 8gb GDDR6", True),
+    ("ssd-nv3-1t", "Snv3s/1000g SSD de 1TB Padrão Nv3 Formato M.2 2280 Nvme 4.0 Gen 4x4", True),
+    ("ssd-nv3-1t", "Hd Ssd M.2 Kingston Nv3 Pci-e 4.0x4 Nvme 1tb - Snv3s/1000g", True),
+    ("r5-7600x", "AMD Ryzen 5 7600X 6 x 4,7GHz Hexa Core Processador AM5 105W", True),
+    ("i5-13400f", "Processador Intel Core i5-13400f, 4.6ghz Max Turbo, Cache 20mb LGA 1700", True),
+    ("ram-fury-d5-32", "Memória Ram Kingston Fury Beast 32GB (2 x 16 GB) DDR5 6000MHz Pc Desktop Gamer", True),
+    ("clr-ak400", "Cooler Para Processador GamerStorm X Redragon AK400 RD", True),
+    ("ext-fan-3pack", "Kit 3 Fans Tgt Humber ARGB 3x120mm Com Controladora Preto", True),
+    ("mb-b650m-a", "Placa-mãe Asus Prime B650m-a Ax6 Ii Am5 4x Ddr5", False),
+    ("mb-b650m-a", "Placa-mãe Asus Prime B650m-a Ax Ii Amd B650 Am5", False),
+])
+def test_mesmo_produto_casos_reais_parte_b(store, cid, titulo, esperado):
+    assert precos.mesmo_produto(store.get(cid), titulo)[0] is esperado
+
+
+def test_combo_nao_descarta_nota_fiscal_ou_pc_desktop_em_peca_avulsa(store):
+    anuncios = [
+        {"componente_id": "ext-pasta", "loja": "Mercado Livre", "url": "https://x/1", "coletado_em": "2026-11-13",
+         "titulo": "Pasta Térmica Arctic Mx-4 4g Melhor Desempenho Original + Nf", "preco_texto": "R$ 62,78"},
+        {"componente_id": "r7-7700", "loja": "Amazon", "url": "https://x/2", "coletado_em": "2026-11-13",
+         "titulo": "MXZ Gaming PC,AMD Ryzen 7 7700", "preco_texto": "R$ 18.716,15"},
+    ]
+    r_pasta = precos.calcular(store.get("ext-pasta"), [anuncios[0]])
+    assert [o.preco for o in r_pasta.ofertas] == [62.78]
+    r_cpu = precos.calcular(store.get("r7-7700"), [anuncios[1]])
+    assert not r_cpu.ofertas and r_cpu.descartes[0].motivo == "kit/combo com outras peças"
+
+
+def test_outlier_com_duas_ofertas_nao_descarta_a_mais_barata(store):
+    anuncios = [
+        {"componente_id": "psu-cx650", "loja": "Pichau", "url": "https://x/1", "coletado_em": "2026-11-13",
+         "titulo": "Fonte 650W 80 Plus Bronze Corsair CX650", "preco_texto": "R$ 350,00"},
+        {"componente_id": "psu-cx650", "loja": "Terabyte", "url": "https://x/2", "coletado_em": "2026-11-13",
+         "titulo": "Fonte Corsair 650W 80 Plus Bronze CX650", "preco_texto": "R$ 2.399,99"},
+    ]
+    r = precos.calcular(store.get("psu-cx650"), anuncios)
+    assert sorted(o.preco for o in r.ofertas) == [350.0, 2399.99]
+    assert r.preco_min == 350.0
+    assert r.qtd_lojas == 2
+
+
+def test_outlier_em_grupo_justo_remove_dobro_via_log_mad():
+    from app.modelos import Componente
+    comp = Componente(id="x", tipo="extra", marca="A", modelo="Coisa 10", specs={}, fonte="f")
+    anuncios = [
+        {"loja": l, "titulo": "A Coisa 10", "preco_texto": p, "url": "https://x", "coletado_em": "2026"}
+        for l, p in [("L1", "R$ 980,00"), ("L2", "R$ 1.000,00"), ("L3", "R$ 1.010,00"), ("L4", "R$ 1.020,00"), ("L5", "R$ 2.000,00")]
+    ]
+    r = precos.calcular(comp, anuncios)
+    assert sorted(o.preco for o in r.ofertas) == [980.0, 1000.0, 1010.0, 1020.0]
+    assert [d.motivo for d in r.descartes] == ["outlier"]
+
+
+def test_detecta_condicao_pagamento_em_oferta():
+    from app.modelos import Componente
+    comp = Componente(id="x", tipo="extra", marca="A", modelo="Coisa 10", specs={}, fonte="f")
+    anuncios = [
+        {"loja": "Kabum", "titulo": "A Coisa 10", "preco_texto": "R$ 990,00 à vista no Pix", "url": "https://x/1", "coletado_em": "2026"},
+        {"loja": "Pichau", "titulo": "A Coisa 10", "preco_texto": "R$ 1.140,00 em até 12x sem juros", "url": "https://x/2", "coletado_em": "2026"},
+        {"loja": "Amazon", "titulo": "A Coisa 10", "preco_texto": "R$ 1.050,00", "url": "https://x/3", "coletado_em": "2026"},
+    ]
+    r = precos.calcular(comp, anuncios)
+    por_loja = {o.loja: o.condicao_pagamento for o in r.ofertas}
+    assert por_loja == {"Kabum": "a_vista", "Pichau": "parcelado", "Amazon": "desconhecida"}

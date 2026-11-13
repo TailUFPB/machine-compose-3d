@@ -97,6 +97,7 @@ class Proposta(BaseModel):
     convergiu: bool
     avisos: list[str] = Field(default_factory=list)
     custo_estimado: float | None = None
+    custo_minimo: float | None = None
 
 
 class Aplicar(BaseModel):

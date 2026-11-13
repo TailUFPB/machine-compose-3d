@@ -30,6 +30,7 @@ class Store:
         self.anuncios: list[dict] = seed["anuncios"]                 # o que a "busca" encontra hoje
         self.historico_precos: list[dict] = seed["historico_precos"]  # ofertas já coletadas
         self.cache_precos: dict[str, dict] = {}                      # componente_id -> {resultado, em}
+        self.links_resolvidos: dict[str, str] = {}                   # "loja|titulo" -> URL direta resolvida no clique
         self.builds: dict[str, Build] = {}
         self.propostas: dict[str, Any] = {}                          # build_id -> Proposta pendente
         self._sb = None

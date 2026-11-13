@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Cena } from "./api";
+import { API, type Cena, ehOfertaUnica, linkOferta } from "./api";
 import { foraDoGabinete, montarCena, posicaoTutorial } from "./cena";
 import { brl, quadroEm } from "./formato";
 
@@ -56,5 +56,21 @@ describe("brl", () => {
   it("formata em reais", () => {
     expect(brl(1234.5).replace(/\s/g, " ")).toBe("R$ 1.234,50");
     expect(brl(null)).toBe("sem preço");
+  });
+});
+
+describe("ofertas e link no clique final", () => {
+  it("monta URL de redirecionamento direto no backend para o clique final", () => {
+    const href = linkOferta("case-h5-flow", "Mercado Livre", "https://www.google.com/search?tbm=shop&q=NZXT H5 Flow");
+    expect(href).toBe(
+      `${API}/ofertas/ir?componente_id=case-h5-flow&loja=Mercado+Livre&url=https%3A%2F%2Fwww.google.com%2Fsearch%3Ftbm%3Dshop%26q%3DNZXT+H5+Flow`,
+    );
+  });
+
+  it("identifica oferta de loja única sem acusar falso positivo em ausência de preço", () => {
+    expect(ehOfertaUnica(1)).toBe(true);
+    expect(ehOfertaUnica(0)).toBe(false);
+    expect(ehOfertaUnica(2)).toBe(false);
+    expect(ehOfertaUnica(null)).toBe(false);
   });
 });

@@ -68,3 +68,14 @@ def test_ja_tenho_fica_fora_do_custo(store):
     b = nova(store, modo="hibrido", itens=[BuildItem(componente_id="rtx-4070s", ja_tenho=True, travado=True)])
     p = agente.propor(store, b)
     assert agente.custo(store, p.itens) == agente.custo(store, [i for i in p.itens if i.componente_id != "rtx-4070s"])
+
+
+def test_proposta_e_resultado_unificam_mediana_e_expoem_minimo(store):
+    from app import resultado
+    b = nova(store, orcamento=7000)
+    p = agente.propor(store, b)
+    assert p.custo_minimo is not None and p.custo_minimo <= p.custo_estimado
+    b_aplicada = Build(id="b2", modo="agente", orcamento=b.orcamento, objetivos=b.objetivos, itens=p.itens)
+    res = resultado.calcular(store, b_aplicada)
+    assert res.total == p.custo_estimado
+    assert res.total_minimo == p.custo_minimo

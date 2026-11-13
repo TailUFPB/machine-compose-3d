@@ -16,15 +16,30 @@ from .compat.regras import consumo_estimado
 from .config import get_settings
 from .fps import estimar_build
 from .modelos import Achado, Build, BuildItem, Componente, Proposta
-from .precos import brl, preco_ref
+from .precos import brl, pesquisar, preco_ref
 from .store import Store
 from .tracing import span, trace
 
 FOLGA_ALVO = 1.15   # prefere par CPU+GPU que passe o FPS-alvo com 15% de folga
 
 
+def _somar_precos(store: Store, itens: list[BuildItem], minimo: bool = False) -> float:
+    total = 0.0
+    for item in itens:
+        if item.ja_tenho:
+            continue
+        r = pesquisar(store, item.componente_id)
+        valor = (r.preco_min if minimo else r.preco_med) or 0.0
+        total += valor * item.quantidade
+    return round(total, 2)
+
+
 def custo(store: Store, itens: list[BuildItem]) -> float:
-    return round(sum((preco_ref(store, i.componente_id) or 0) * i.quantidade for i in itens if not i.ja_tenho), 2)
+    return _somar_precos(store, itens, minimo=False)
+
+
+def custo_minimo(store: Store, itens: list[BuildItem]) -> float:
+    return _somar_precos(store, itens, minimo=True)
 
 
 def _barato(store: Store, cands: list[Componente]) -> Componente | None:
@@ -221,4 +236,4 @@ def propor(store: Store, build: Build) -> Proposta:
             if i.componente_id not in travados:
                 i.justificativa = justificativas.get(i.componente_id)
         return Proposta(itens=itens, achados=achados, tentativas=tentativas, convergiu=n_bloq == 0,
-                        avisos=avisos, custo_estimado=custo(store, itens))
+                        avisos=avisos, custo_estimado=custo(store, itens), custo_minimo=custo_minimo(store, itens))
