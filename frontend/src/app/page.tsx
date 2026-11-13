@@ -7,6 +7,8 @@ import {
 import { api, type Build, type Cena, type Componente, type Proposta } from "@/lib/api";
 import { MODOS, rotuloBuild } from "@/lib/formato";
 
+import PainelPeca from "@/components/PainelPeca";
+
 const Cena3D = dynamic(() => import("@/components/Cena3D"), { ssr: false, loading: () => <span className="carregando" /> });
 
 const METAS_INICIAIS: Metas = { modo: "agente", orcamento: 6000, cep: "", objetivos: { jogos: ["cyberpunk-2077", "cs2", "fortnite"], resolucao: "1080p", fps_alvo: 60 } };
@@ -61,6 +63,8 @@ export default function Pagina() {
   const [tentativa, setTentativa] = useState(0);
   const [cena, setCena] = useState<Cena | null>(null);
   const [proposta, setProposta] = useState<Proposta | null>(null);
+  const [aberta, setAberta] = useState<string | null>(null);       // peça aberta, comum à cena e ao painel
+  const [destaque, setDestaque] = useState<string | null>(null);   // peça sob o mouse, na lista ou na cena
   const agenteAcao = useAcao();
 
   useEffect(() => {
@@ -86,7 +90,7 @@ export default function Pagina() {
   useEffect(() => {
     if (build && vista === "3d") api.cena(build.id).then(setCena).catch(() => setCena(null));
   }, [vista, build?.id, assinatura]);
-  useEffect(() => setProposta(null), [build?.id]);
+  useEffect(() => { setProposta(null); setAberta(null); setDestaque(null); }, [build?.id]);
 
   const navegar = ir;
   const rotulo = (b: Build) => `${rotuloBuild(b)} · ${MODOS[b.modo].nome}`;
@@ -177,7 +181,15 @@ export default function Pagina() {
                 <p className="sub">Peças em escala pela ficha técnica. O que conflita fica em vermelho; o modo passo a passo mostra a ordem de montagem.</p>
               </div>
             </div>
-            <section className="card" aria-label="Cena 3D">{cena ? <Cena3D key={build?.id} cena={cena} /> : <span className="carregando" />}</section>
+            <section className="card cena-com-painel" aria-label="Cena 3D">
+              {cena ? (
+                <>
+                  <Cena3D key={build?.id} cena={cena} aberta={aberta} onAberta={setAberta} destaque={destaque} onDestaque={setDestaque} />
+                  <PainelPeca build={build} catalogo={catalogo} cena={cena} aberta={aberta} onAberta={setAberta}
+                    destaque={destaque} onDestaque={setDestaque} onBuild={atualizar} />
+                </>
+              ) : <span className="carregando" />}
+            </section>
           </>
         )}
         {fonteDados && <p className="fonte-dados">{fonteDados}</p>}
