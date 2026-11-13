@@ -19,7 +19,7 @@ export interface PainelProps {
   onBuild: (b: Build) => void;
   /** Prévia de troca em curso (a cena recebida pela página já é a dela); `pedindo`: candidata aguardando resposta. */
   previa: { de: string; para: string; cena: CenaPrevia } | null;
-  pedindo: string | null;
+  pedindo: { de: string; para: string } | null;
   erroPrevia: string | null;
   onPrevia: (de: string, para: string) => void;
   onCancelarPrevia: () => void;
@@ -109,9 +109,11 @@ function Trocar({ build, cena, previa, pedindo, erroPrevia, onPrevia, onCancelar
   const assinatura = JSON.stringify(build.itens);
   useEffect(() => {
     setOpcoes(null);
-    api.componentes(tipo, build.id, todos).then((cs) => setOpcoes(cs.filter((c) => c.id !== de))).catch(() => setOpcoes([]));
+    // nem a peça atual nem outra que já está na build (dois discos iguais duplicariam o item)
+    const naBuild = new Set(build.itens.map((i) => i.componente_id));
+    api.componentes(tipo, build.id, todos).then((cs) => setOpcoes(cs.filter((c) => !naBuild.has(c.id)))).catch(() => setOpcoes([]));
   }, [tipo, build.id, todos, assinatura, de]);
-  const escolhida = pedindo ?? previa?.para ?? null;
+  const escolhida = pedindo?.para ?? previa?.para ?? null;
   const dif = previa && cena ? diferencaConflitos(cena.conflitos, previa.cena.conflitos, previa.de, previa.para) : null;
   const sinal = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${brl(Math.abs(v))}`;
 
@@ -139,7 +141,7 @@ function Trocar({ build, cena, previa, pedindo, erroPrevia, onPrevia, onCancelar
           {dif && dif.novos.length > 0 && <p className="neg">Novos conflitos: {dif.novos.map((c) => c.descricao).join("; ")}</p>}
           {dif && dif.resolvidos.length > 0 && <p className="pos">Resolve: {dif.resolvidos.map((c) => c.descricao).join("; ")}</p>}
           <div className="acoes">
-            <button className="btn primario" disabled={aplicando}
+            <button className="btn primario" disabled={aplicando || !!pedindo}   // outra candidata carregando: aplicaria a anterior
               onClick={async () => { setAplicando(true); try { await onAplicarTroca(); } finally { setAplicando(false); } }}>Aplicar troca</button>
             <button className="btn" onClick={onCancelarPrevia}>Cancelar</button>
           </div>

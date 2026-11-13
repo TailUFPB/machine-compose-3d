@@ -8,7 +8,7 @@ import { api, type Build, type Cena, type CenaPrevia, type Componente, ErroApi, 
 import { ultimaVence } from "@/lib/painel";
 import { MODOS, rotuloBuild } from "@/lib/formato";
 
-import PainelPeca from "@/components/PainelPeca";
+import PainelPeca, { idDaChave } from "@/components/PainelPeca";
 
 const Cena3D = dynamic(() => import("@/components/Cena3D"), { ssr: false, loading: () => <span className="carregando" /> });
 
@@ -68,7 +68,7 @@ export default function Pagina() {
   const [destaque, setDestaque] = useState<string | null>(null);   // peça sob o mouse, na lista ou na cena
   // Prévia de troca: nunca grava; a última candidata pedida vence (respostas atrasadas são ignoradas)
   const [previa, setPrevia] = useState<{ de: string; para: string; cena: CenaPrevia } | null>(null);
-  const [pedindo, setPedindo] = useState<string | null>(null);
+  const [pedindo, setPedindo] = useState<{ de: string; para: string } | null>(null);
   const [erroPrevia, setErroPrevia] = useState<string | null>(null);
   const senhaPrevia = useRef(ultimaVence());
   const agenteAcao = useAcao();
@@ -102,7 +102,7 @@ export default function Pagina() {
   const pedirPrevia = useCallback((de: string, para: string) => {
     if (!build) return;
     const n = senhaPrevia.current.pedir();
-    setPedindo(para); setErroPrevia(null);
+    setPedindo({ de, para }); setErroPrevia(null);
     api.previa(build.id, de, para)
       .then((c) => { if (senhaPrevia.current.vale(n)) { setPrevia({ de, para, cena: c }); setPedindo(null); } })
       .catch((e) => { if (senhaPrevia.current.vale(n)) { setErroPrevia(mensagem(e)); setPedindo(null); } });
@@ -117,6 +117,10 @@ export default function Pagina() {
   }, [build?.id, previa]);
   // a build mudou (aqui ou em outra aba) ou a aba 3D saiu de cena: a prévia não vale mais
   useEffect(() => { cancelarPrevia(); setErroPrevia(null); }, [build?.id, assinatura, vista]);
+  useEffect(() => {   // a peça aberta deixou de ser a que está sendo trocada (voltar à lista, clique fora): prévia órfã
+    const de = previa?.de ?? pedindo?.de;
+    if (de && idDaChave(aberta) !== de) cancelarPrevia();
+  }, [aberta]);
   useEffect(() => {   // na prévia, Esc cancela (a cena não fecha a peça aberta por baixo)
     if (!previa && !pedindo) return;
     const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") cancelarPrevia(); };
@@ -217,7 +221,7 @@ export default function Pagina() {
               {cena ? (
                 <>
                   <Cena3D key={build?.id} cena={previa?.cena ?? cena} aberta={aberta} onAberta={setAberta} destaque={destaque}
-                    onDestaque={setDestaque} previa={previa && { para: previa.para }} />
+                    onDestaque={setDestaque} previa={previa && { para: previa.para }} escNoPainel={!!(previa || pedindo)} />
                   <PainelPeca build={build} catalogo={catalogo} cena={cena} aberta={aberta} onAberta={setAberta}
                     destaque={destaque} onDestaque={setDestaque} onBuild={atualizar}
                     previa={previa} pedindo={pedindo} erroPrevia={erroPrevia}

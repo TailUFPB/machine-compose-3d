@@ -161,3 +161,68 @@ test.describe("trocar com prévia", () => {
     await expect(page.getByTestId("trocar")).toBeDisabled();
   });
 });
+
+test.describe("prévia: casos da revisão final", () => {
+  let id: string;
+  const atrasar = (page: Page, para: string, ms = 1500) => page.route("**/cena/previa", async (rota) => {
+    if (rota.request().postDataJSON().para === para) await new Promise((r) => setTimeout(r, ms));
+    await rota.continue();
+  });
+  const trocarGpu = async (page: Page) => {
+    await linha(page, GPU).click();
+    await page.getByTestId("trocar").click();
+    await page.getByTestId("ver-incompativeis").check();
+  };
+  test.beforeEach(async ({ request }) => { id = await criarBuild(request, ["case-nr200p"]); });
+
+  test("peça que já está na build não aparece como candidata", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request, ["ssd-sn770-1t"]));
+    await linha(page, "ssd-nv3-1t").click();
+    await page.getByTestId("trocar").click();
+    await page.getByTestId("ver-incompativeis").check();
+    await expect(page.getByTestId("candidata-ssd-990pro-2t")).toBeVisible();
+    await expect(page.getByTestId("candidata-ssd-sn770-1t")).toHaveCount(0);
+  });
+
+  test("voltar à lista durante a prévia descarta a prévia", async ({ page }) => {
+    await abrirCena(page, id);
+    await trocarGpu(page);
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    await page.getByRole("button", { name: "Voltar à lista" }).click();
+    await expect(page.getByTestId("selo-previa")).toHaveCount(0);
+  });
+
+  test("Esc enquanto a prévia carrega não fecha a peça aberta", async ({ page }) => {
+    await abrirCena(page, id);
+    await trocarGpu(page);
+    await atrasar(page, "rtx-4080s");
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("cena")).toHaveAttribute("data-aberta", GPU);
+    await expect(page.getByTestId("detalhe-peca")).toBeVisible();
+    await page.waitForTimeout(1800);   // a resposta atrasada chega depois do Esc e não pode reabrir a prévia
+    await expect(page.getByTestId("selo-previa")).toHaveCount(0);
+  });
+
+  test("com a build explodida, a prévia ainda mostra o conflito", async ({ page }) => {
+    await abrirCena(page, id);
+    await page.getByTestId("explodir").click();
+    await trocarGpu(page);
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    await expect(page.getByTestId("medida-cena").first()).toBeVisible();
+  });
+
+  test("Aplicar fica desabilitado enquanto outra candidata carrega", async ({ page }) => {
+    await abrirCena(page, id);
+    await trocarGpu(page);
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    await atrasar(page, "rx-7600");
+    await page.getByTestId("candidata-rx-7600").click();
+    await expect(page.getByRole("button", { name: "Aplicar troca" })).toBeDisabled();
+    await expect(page.getByTestId("cena")).toHaveAttribute("data-previa", "rx-7600");
+    await expect(page.getByRole("button", { name: "Aplicar troca" })).toBeEnabled();
+  });
+});

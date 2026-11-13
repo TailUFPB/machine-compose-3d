@@ -25,6 +25,8 @@ def itens_trocados(store: Store, build: Build, de: str, para: str) -> list[Build
         raise TrocaInvalida(404, "item não está na build")
     if atual.tipo != novo.tipo:
         raise TrocaInvalida(422, f"troca precisa ser do mesmo tipo ({atual.tipo} por {novo.tipo})")
+    if para != de and any(i.componente_id == para for i in build.itens):
+        raise TrocaInvalida(409, f"{novo.nome} já está na build: escolha outra peça")
     if item.travado:
         raise TrocaInvalida(409, f"{atual.nome} está travada: destrave para trocar")
     if item.ja_tenho:

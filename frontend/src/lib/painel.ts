@@ -48,9 +48,12 @@ export function bloqueioTroca(item: BuildItem): string | null {
 type Conflito = Cena["conflitos"][number];
 
 /** Conflitos que a prévia cria e que ela resolve. O id do achado traz os ids das peças, então o mesmo problema com a
- *  candidata no lugar da peça atual tem outro id: compara com `de` e `para` trocados por `*`. */
+ *  candidata no lugar da peça atual tem outro id: compara com `de` e `para` trocados por `*`, peça por peça. */
 export function diferencaConflitos(atual: Conflito[], previa: Conflito[], de: string, para: string): { novos: Conflito[]; resolvidos: Conflito[] } {
-  const chave = (c: Conflito) => c.id.split(de).join("*").split(para).join("*");
+  // id = "regra:subregra:idA+idB": troca peça por peça (nunca por pedaço: "rtx-4070" é prefixo de "rtx-4070s") e
+  // reordena o grupo, porque o backend ordena os ids e a candidata pode cair em outra posição
+  const chave = (c: Conflito) => c.id.split(":")
+    .map((parte) => parte.split("+").map((t) => (t === de || t === para ? "*" : t)).sort().join("+")).join(":");
   const antes = new Set(atual.map(chave)), depois = new Set(previa.map(chave));
   return { novos: previa.filter((c) => !antes.has(chave(c))), resolvidos: atual.filter((c) => !depois.has(chave(c))) };
 }

@@ -62,3 +62,11 @@ def test_troca_revisa_e_salva(client):
     r = trocar(client, bid, "rtx-4060-8g", "rx-7600")
     assert r.json()["status"] == "revisada"
     assert "rx-7600" in ids(client.get(f"/builds/{bid}").json())
+
+
+def test_troca_para_peca_que_ja_esta_na_build_e_recusada(client):
+    bid = criar(client, BASE_OK + ["ssd-sn770-1t"])
+    r = trocar(client, bid, "ssd-nv3-1t", "ssd-sn770-1t")
+    assert r.status_code == 409 and "já está na build" in r.json()["detail"]
+    assert ids(client.get(f"/builds/{bid}").json()).count("ssd-sn770-1t") == 1
+    assert client.post(f"/builds/{bid}/cena/previa", json={"de": "ssd-nv3-1t", "para": "ssd-sn770-1t"}).status_code == 409

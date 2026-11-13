@@ -146,9 +146,11 @@ interface Props {
   onDestaque?: (componenteId: string | null) => void;
   /** Troca ainda não aplicada: a cena recebida já é a da prévia; `para` é a candidata. */
   previa?: { para: string } | null;
+  /** Esc é do painel (prévia aberta ou carregando): a cena não fecha a peça aberta por baixo. */
+  escNoPainel?: boolean;
 }
 
-export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = null, onDestaque, previa = null }: Props) {
+export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = null, onDestaque, previa = null, escNoPainel = false }: Props) {
   const caixas = useMemo(() => montarCena(cena), [cena]);
   const cabos = useMemo(() => montarCabos(caixas), [caixas]);
   const regioes = useMemo(() => regioesDeConflito(caixas, cena.conflitos), [caixas, cena]);
@@ -230,10 +232,13 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
   const mostraRegioes = !tutorial && !explodida && !aberto;   // as regiões valem para a build montada
   const etiquetas = useRef<Record<string, HTMLElement | null>>({});
   useEffect(() => {   // Esc fecha a peça aberta; sem peça aberta, desfaz a build explodida
-    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape" && !previa) aberto ? setAberta(null) : setExplodida(false); };   // na prévia, Esc é do painel (cancela)
+    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape" && !previa && !escNoPainel) aberto ? setAberta(null) : setExplodida(false); };   // na prévia, Esc é do painel (cancela)
     addEventListener("keydown", tecla);
     return () => removeEventListener("keydown", tecla);
-  }, [aberto, previa]);
+  }, [aberto, previa, escNoPainel]);
+  useEffect(() => {   // a prévia mostra a build montada: explodida e passo a passo escondem as regiões de conflito
+    if (previa) { setExplodida(false); setTutorial(false); }
+  }, [previa?.para]);
 
   if (!caixas.length) return <p className="vazio-bloco">Adicione peças para ver a montagem em 3D.</p>;
   const rotulo = (c: Caixa) => {

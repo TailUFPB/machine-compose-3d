@@ -56,6 +56,16 @@ describe("diferencaConflitos", () => {
   });
 });
 
+describe("diferencaConflitos com ids que são prefixo um do outro", () => {
+  it("rtx-4070 por rtx-4070s: o mesmo conflito com a candidata não conta como novo nem resolvido", () => {
+    const atual = [conflito("par:gpu_comprimento:case1+rtx-4070", ["rtx-4070", "case1"])];
+    const previa = [conflito("par:gpu_comprimento:case1+rtx-4070s", ["rtx-4070s", "case1"]), conflito("eletrico:pico:psu1+rtx-4070s", ["rtx-4070s", "psu1"])];
+    const { novos, resolvidos } = diferencaConflitos(atual, previa, "rtx-4070", "rtx-4070s");
+    expect(novos.map((c) => c.id)).toEqual(["eletrico:pico:psu1+rtx-4070s"]);
+    expect(resolvidos).toEqual([]);
+  });
+});
+
 describe("ultimaVence", () => {
   it("só a última senha pedida vale", () => {
     const s = ultimaVence();
