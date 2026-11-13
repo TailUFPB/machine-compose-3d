@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from . import agente, exportar, importar, precos, resultado
 from .compat.consolidador import bloqueantes_abertos, revisar_build
@@ -90,7 +91,8 @@ def componentes(tipo: str | None = None, build_id: str | None = None, todos: boo
             continue
         r = precos.pesquisar(store, c.id)
         saida.append({**c.model_dump(), "nome": c.nome, "compativel": motivo is None, "motivo": motivo,
-                      "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max, "confianca": r.confianca}})
+                      "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max,
+                                "qtd_lojas": r.qtd_lojas, "confianca": r.confianca}})
     return saida
 
 
@@ -142,6 +144,22 @@ def atualizar_item(build_id: str, componente_id: str, dados: ItemAtualizar, stor
 def remover_item(build_id: str, componente_id: str, store: Store = Depends(get_store)):
     b = _build(store, build_id)
     b.itens = [i for i in b.itens if i.componente_id != componente_id]
+    return _revisar_e_salvar(store, b)
+
+
+@app.post("/builds/{build_id}/trocar", response_model=Build)
+def trocar_item(build_id: str, dados: dict[str, str], store: Store = Depends(get_store)):
+    de_id, para_id = dados.get("de_id", ""), dados.get("para_id", "")
+    b = _build(store, build_id)
+    idx = next((k for k, i in enumerate(b.itens) if i.componente_id == de_id), None)
+    if idx is None:
+        raise HTTPException(404, "item de origem não está na build")
+    if para_id not in store.componentes:
+        raise HTTPException(404, "componente substituto não encontrado")
+    atual = b.itens[idx]
+    if atual.travado:
+        raise HTTPException(409, f"{store.componentes[de_id].nome} está travada: destrave para trocar")
+    b.itens[idx] = BuildItem(componente_id=para_id, quantidade=atual.quantidade, ja_tenho=atual.ja_tenho, origem="usuario")
     return _revisar_e_salvar(store, b)
 
 
@@ -239,6 +257,19 @@ def comparar(a: str, b: str, resolucao: str = Query("1080p"), store: Store = Dep
 @app.get("/builds/{build_id}/resultado", response_model=resultado.Resultado)
 def ver_resultado(build_id: str, store: Store = Depends(get_store)):
     return resultado.calcular(store, _build(store, build_id))
+
+
+@app.get("/ofertas/ir")
+def ir_para_oferta(componente_id: str, loja: str, url: str, store: Store = Depends(get_store)):
+    comp = store.get(componente_id)
+    if comp is None:
+        raise HTTPException(404, "Componente não encontrado")
+    r = precos.pesquisar(store, componente_id)
+    oferta = next((o for o in r.ofertas if o.loja == loja and o.url == url), None)
+    if oferta is None:
+        raise HTTPException(400, "Oferta não encontrada para redirecionamento")
+    destino = precos.resolver_link_loja(store, oferta.loja, oferta.titulo, oferta.url)
+    return RedirectResponse(destino, status_code=307)
 
 
 @app.post("/builds/{build_id}/exportar")

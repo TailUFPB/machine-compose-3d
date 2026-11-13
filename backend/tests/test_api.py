@@ -127,3 +127,97 @@ def test_ignorar_achado(client):
 def test_listar_builds(client):
     a = criar(client)
     assert a in [b["id"] for b in client.get("/builds").json()]
+
+
+def test_componentes_e_resultado_expoem_qtd_lojas_e_alternativas_sem_preco(client, store):
+    comps = client.get("/componentes", params={"tipo": "gpu"}).json()
+    assert all(c["preco"]["qtd_lojas"] >= 1 for c in comps if c["preco"]["med"] is not None)
+
+    bid = criar(client, orcamento=12000)
+    for c in [*BASE_OK, "clr-ak400"]:
+        add(client, bid, c)
+
+    # Remove ofertas do cooler para simular ausência no mercado mantendo a peça no catálogo
+    store.anuncios = [a for a in store.anuncios if a["componente_id"] != "clr-ak400"]
+    store.cache_precos.pop("clr-ak400", None)
+
+    res = client.get(f"/builds/{bid}/resultado").json()
+    assert res["total_minimo"] <= res["total"]
+    linhas = [l for xs in res["lojas"].values() for l in xs]
+    assert all(l["qtd_lojas"] >= 1 for l in linhas)
+    assert all(l["preco_ref"] > 0 and l["subtotal_ref"] == round(l["preco_ref"] * l["quantidade"], 2) for l in linhas)
+    assert any("AK400" in nome for nome in res["sem_preco"])
+    alts = [a for a in res["alternativas_sem_preco"] if a["de_id"] == "clr-ak400"]
+    assert len(alts) == 1
+    assert alts[0]["para_id"] != "clr-ak400" and alts[0]["preco_med"] > 0 and alts[0]["qtd_lojas"] >= 1
+
+
+def test_endpoint_ofertas_ir_redireciona_e_bloqueia_open_redirect(client, store, monkeypatch):
+    from app import precos
+    from app.config import get_settings
+
+    # Injeta oferta com URL do Google Shopping no cache do componente e simula resolução Serper
+    r_atual = precos.pesquisar(store, "case-h5-flow")
+    oferta = r_atual.ofertas[0].model_copy(update={"loja": "Kabum", "url": "https://www.google.com/search?tbm=shop&q=H5"})
+    store.cache_precos["case-h5-flow"]["resultado"] = r_atual.model_copy(update={"ofertas": [oferta]})
+
+    monkeypatch.setattr(get_settings(), "busca_provider", "serper")
+    monkeypatch.setattr(get_settings(), "serper_api_key", "chave-teste")
+    direta = "https://www.kabum.com.br/produto/692553/h5-flow"
+    store.links_resolvidos[f"Kabum|{oferta.titulo}"] = direta
+
+    resp = client.get(
+        "/ofertas/ir",
+        params={"componente_id": "case-h5-flow", "loja": "Kabum", "url": oferta.url},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 307
+    assert resp.headers["location"] == direta
+
+    # Tentativa de redirecionamento arbitrário deve ser rejeitada
+    bloqueado = client.get(
+        "/ofertas/ir",
+        params={"componente_id": "case-h5-flow", "loja": "Kabum", "url": "https://evil.example/phish"},
+        follow_redirects=False,
+    )
+    assert bloqueado.status_code == 400
+
+
+def test_alternativa_sem_preco_nao_sugere_item_ja_presente_na_build(client, store):
+    ssds = [c.id for c in store.por_tipo("armazenamento")]
+    assert len(ssds) >= 2
+    bid = criar(client, orcamento=12000)
+    add(client, bid, ssds[0])
+    add(client, bid, ssds[1])
+
+    # Deixa apenas ssds[1] (já na build) com preço; os demais do mesmo tipo ficam sem oferta
+    sem_oferta = set(ssds) - {ssds[1]}
+    store.anuncios = [a for a in store.anuncios if a["componente_id"] not in sem_oferta]
+    for cid in sem_oferta:
+        store.cache_precos.pop(cid, None)
+
+    res = client.get(f"/builds/{bid}/resultado").json()
+    assert res["alternativas_sem_preco"] == []
+
+
+def test_trocar_item_atomico_e_equivalencia_por_categoria(client, store):
+    # Equivalência por categoria: GPU forte sem preço deve sugerir GPU próxima de `indice`, não a mais fraca
+    gpus = sorted(store.por_tipo("gpu"), key=lambda c: c.specs.get("indice", 0))
+    assert len(gpus) >= 3
+    gpu_topo = gpus[-1]
+    bid = criar(client, orcamento=20000)
+    for c in [i for i in BASE_OK if store.get(i).tipo != "gpu"] + [gpu_topo.id]:
+        add(client, bid, c)
+
+    store.anuncios = [a for a in store.anuncios if a["componente_id"] != gpu_topo.id]
+    store.cache_precos.pop(gpu_topo.id, None)
+
+    res = client.get(f"/builds/{bid}/resultado").json()
+    alt_gpu = next(a for a in res["alternativas_sem_preco"] if a["de_id"] == gpu_topo.id)
+    assert alt_gpu["para_id"] != gpus[0].id  # não cai na GPU mais fraca só por ser a mais barata
+
+    # Troca atômica preserva quantidade e substitui o item em uma única chamada
+    resp_troca = client.post(f"/builds/{bid}/trocar", json={"de_id": gpu_topo.id, "para_id": alt_gpu["para_id"]})
+    assert resp_troca.status_code == 200
+    ids = {i["componente_id"] for i in resp_troca.json()["itens"]}
+    assert gpu_topo.id not in ids and alt_gpu["para_id"] in ids
