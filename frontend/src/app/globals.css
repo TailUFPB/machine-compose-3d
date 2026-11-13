@@ -285,3 +285,8 @@ legend { color: var(--label); }
 .ofertas-peca { display: grid; gap: 4px; }
 .ofertas-peca .sub { display: block; }
 @media (max-width: 1100px) { .cena-com-painel { grid-template-columns: minmax(0, 1fr); } }
+.painel-peca .trocar { display: grid; gap: 8px; }
+.painel-peca .candidatas { max-height: 260px; overflow-y: auto; }
+.painel-peca .candidata { text-align: left; white-space: normal; height: auto; min-height: 32px; }
+.painel-peca .candidata[aria-pressed="true"] { color: var(--hue); }
+.painel-peca .diferenca { display: grid; gap: 6px; padding: 12px; border-radius: var(--radius-control); background: var(--raised); }

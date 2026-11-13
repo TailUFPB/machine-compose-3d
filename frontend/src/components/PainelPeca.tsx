@@ -3,9 +3,9 @@
 // detalhe (ficha, preço com fonte, motivo da escolha) e as ações Trocar e Remover.
 // Design: docs/superpowers/specs/2026-11-13-cena-paineis-design.md
 import { useEffect, useState } from "react";
-import { api, type Build, type Cena, type Componente, type ResultadoPreco } from "@/lib/api";
+import { api, type Build, type Cena, type CenaPrevia, type Componente, type ResultadoPreco } from "@/lib/api";
 import { brl, TIPOS } from "@/lib/formato";
-import { bloqueioTroca, linhasPainel, resumoFicha } from "@/lib/painel";
+import { bloqueioTroca, diferencaConflitos, linhasPainel, resumoFicha } from "@/lib/painel";
 import { ErroBloco, OfertasPeca, useAcao } from "./Paineis";
 
 export interface PainelProps {
@@ -17,6 +17,13 @@ export interface PainelProps {
   destaque: string | null;               // id da peça sob o mouse (na lista ou na cena)
   onDestaque: (id: string | null) => void;
   onBuild: (b: Build) => void;
+  /** Prévia de troca em curso (a cena recebida pela página já é a dela); `pedindo`: candidata aguardando resposta. */
+  previa: { de: string; para: string; cena: CenaPrevia } | null;
+  pedindo: string | null;
+  erroPrevia: string | null;
+  onPrevia: (de: string, para: string) => void;
+  onCancelarPrevia: () => void;
+  onAplicarTroca: () => Promise<void>;
 }
 
 /** id da peça da build a partir da `chave` da caixa aberta na cena. */
@@ -50,7 +57,8 @@ export default function PainelPeca(props: PainelProps) {
   );
 }
 
-function Detalhe({ build, catalogo, aberta, onAberta, onBuild }: PainelProps) {
+function Detalhe(props: PainelProps) {
+  const { build, catalogo, aberta, onAberta, onBuild, onCancelarPrevia } = props;
   const id = idDaChave(aberta)!;
   const c = catalogo[id];
   const item = build.itens.find((i) => i.componente_id === id)!;
@@ -58,6 +66,7 @@ function Detalhe({ build, catalogo, aberta, onAberta, onBuild }: PainelProps) {
   const { ocupado, erro, rodar } = useAcao();
   const [preco, setPreco] = useState<ResultadoPreco | null | undefined>(undefined);
   const [confirmar, setConfirmar] = useState(false);
+  const [trocando, setTrocando] = useState(false);
   const assinatura = JSON.stringify(build.itens);
   useEffect(() => {
     api.precos(build.id).then((ps) => setPreco(ps.find((p) => p.componente_id === id) ?? null)).catch(() => setPreco(null));
@@ -78,13 +87,64 @@ function Detalhe({ build, catalogo, aberta, onAberta, onBuild }: PainelProps) {
       <p>{item.justificativa ?? "escolhida por você"}</p>
       <ErroBloco erro={erro} />
       {bloqueio && <p className="aviso-bloco">Para trocar ou remover: {bloqueio}.</p>}
+      {trocando && <Trocar {...props} de={id} />}
       <div className="acoes">
-        <button className="btn" data-testid="trocar" disabled>Trocar</button>
+        <button className="btn" data-testid="trocar" aria-pressed={trocando} disabled={!!bloqueio}
+          onClick={() => { if (trocando) onCancelarPrevia(); setTrocando(!trocando); }}>Trocar</button>
         <button className="btn perigo" data-testid="remover" disabled={!!bloqueio || ocupado}
           onClick={() => confirmar ? rodar(async () => { onBuild(await api.remover(build.id, id)); onAberta(null); }) : setConfirmar(true)}>
           {confirmar ? "Confirmar remoção" : "Remover"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Candidatas do mesmo tipo; clicar numa mostra a prévia na cena, e só "Aplicar troca" grava. */
+function Trocar({ build, cena, previa, pedindo, erroPrevia, onPrevia, onCancelarPrevia, onAplicarTroca, catalogo, de }: PainelProps & { de: string }) {
+  const tipo = catalogo[de].tipo;
+  const [todos, setTodos] = useState(false);
+  const [opcoes, setOpcoes] = useState<Componente[] | null>(null);
+  const [aplicando, setAplicando] = useState(false);
+  const assinatura = JSON.stringify(build.itens);
+  useEffect(() => {
+    setOpcoes(null);
+    api.componentes(tipo, build.id, todos).then((cs) => setOpcoes(cs.filter((c) => c.id !== de))).catch(() => setOpcoes([]));
+  }, [tipo, build.id, todos, assinatura, de]);
+  const escolhida = pedindo ?? previa?.para ?? null;
+  const dif = previa && cena ? diferencaConflitos(cena.conflitos, previa.cena.conflitos, previa.de, previa.para) : null;
+  const sinal = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${brl(Math.abs(v))}`;
+
+  return (
+    <div className="trocar" aria-label="Trocar peça">
+      <h3>Trocar por</h3>
+      <label className="chip"><input type="checkbox" data-testid="ver-incompativeis" checked={todos} onChange={(e) => setTodos(e.target.checked)} /> Incompatíveis</label>
+      {opcoes === null && <span className="carregando" />}
+      {opcoes?.length === 0 && <p className="vazio-bloco">Nenhuma opção compatível com a build.</p>}
+      <ul className="lista candidatas">
+        {opcoes?.map((c) => (
+          <li key={c.id}>
+            <button className="btn texto candidata" data-testid={`candidata-${c.id}`} aria-pressed={escolhida === c.id}
+              onClick={() => onPrevia(de, c.id)}>{c.nome}</button>
+            <span className="dir">{c.preco.med == null ? <span className="vazio">sem preço</span> : <span className="num">{brl(c.preco.med)}</span>}</span>
+            {!c.compativel && <span className="linha2 neg">Incompatível: {c.motivo}</span>}
+          </li>
+        ))}
+      </ul>
+      <ErroBloco erro={erroPrevia} />
+      {previa && previa.de === de && (
+        <div className="diferenca" data-testid="diferenca-previa">
+          <p><strong>{catalogo[previa.para]?.nome ?? previa.para}</strong> no lugar, ainda não aplicada.</p>
+          <p>Preço: {previa.cena.diferenca_preco == null ? "sem preço com fonte" : sinal(previa.cena.diferenca_preco)}</p>
+          {dif && dif.novos.length > 0 && <p className="neg">Novos conflitos: {dif.novos.map((c) => c.descricao).join("; ")}</p>}
+          {dif && dif.resolvidos.length > 0 && <p className="pos">Resolve: {dif.resolvidos.map((c) => c.descricao).join("; ")}</p>}
+          <div className="acoes">
+            <button className="btn primario" disabled={aplicando}
+              onClick={async () => { setAplicando(true); try { await onAplicarTroca(); } finally { setAplicando(false); } }}>Aplicar troca</button>
+            <button className="btn" onClick={onCancelarPrevia}>Cancelar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

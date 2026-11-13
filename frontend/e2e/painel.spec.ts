@@ -70,3 +70,94 @@ test.describe("painel da build", () => {
     }
   });
 });
+
+test.describe("trocar com prévia", () => {
+  let id: string;
+  const gpuDaBuild = async (request: Parameters<typeof criarBuild>[0]) =>
+    (await (await request.get(`${API}/builds/${id}`)).json()).itens.map((i: { componente_id: string }) => i.componente_id);
+  /** Abre a GPU no painel, entra em Trocar e liga as incompatíveis (a GPU longa não cabe no NR200P). */
+  const trocarGpu = async (page: Page) => {
+    await linha(page, GPU).click();
+    await page.getByTestId("trocar").click();
+    await page.getByTestId("ver-incompativeis").check();
+  };
+  test.beforeEach(async ({ request }) => { id = await criarBuild(request, ["case-nr200p"]); });
+
+  test("trocar mostra prévia sem gravar", async ({ page, request }) => {
+    const erros = await abrirCena(page, id);
+    await trocarGpu(page);
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    await expect(page.getByTestId("cena")).toHaveAttribute("data-previa", "rtx-4080s");
+    await expect(page.getByTestId("medida-cena").first()).toBeVisible();
+    await expect(page.getByTestId("diferenca-previa")).toContainText("R$");
+    await expect(page.getByTestId("descricao-cena")).toContainText("Prévia, não aplicada.");
+    expect(await gpuDaBuild(request)).toContain(GPU);
+    expect(erros).toEqual([]);
+  });
+
+  test("aplicar grava e sai da prévia", async ({ page, request }) => {
+    await abrirCena(page, id);
+    await trocarGpu(page);
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    await page.getByRole("button", { name: "Aplicar troca" }).click();
+    await expect(page.getByTestId("selo-previa")).toHaveCount(0);
+    await expect(page.getByTestId("cena")).toHaveAttribute("data-aberta", "rtx-4080s");
+    const ids = await gpuDaBuild(request);
+    expect(ids).toContain("rtx-4080s");
+    expect(ids).not.toContain(GPU);
+  });
+
+  for (const como of ["Cancelar", "Esc"] as const) {
+    test(`${como} volta sem gravar`, async ({ page, request }) => {
+      await abrirCena(page, id);
+      await trocarGpu(page);
+      await expect(page.getByTestId("cena")).toHaveAttribute("data-aberta", GPU);
+      await page.getByTestId("candidata-rtx-4080s").click();
+      await expect(page.getByTestId("selo-previa")).toBeVisible();
+      if (como === "Esc") await page.keyboard.press("Escape");
+      else await page.getByRole("button", { name: "Cancelar" }).click();
+      await expect(page.getByTestId("selo-previa")).toHaveCount(0);
+      await expect(page.getByTestId("cena")).toHaveAttribute("data-aberta", GPU);   // a peça aberta não fecha por baixo
+      expect(await gpuDaBuild(request)).toContain(GPU);
+    });
+  }
+
+  test("a última candidata vence mesmo se a primeira responder depois", async ({ page }) => {
+    await abrirCena(page, id);
+    await trocarGpu(page);
+    await page.route("**/cena/previa", async (rota) => {   // a prévia da primeira candidata chega atrasada
+      if (rota.request().postDataJSON().para === "rtx-4080s") await new Promise((r) => setTimeout(r, 1500));
+      await rota.continue();
+    });
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await page.getByTestId("candidata-rx-7600").click();
+    await expect(page.getByTestId("cena")).toHaveAttribute("data-previa", "rx-7600");
+    await page.waitForTimeout(2000);   // depois que a resposta atrasada chegou
+    await expect(page.getByTestId("cena")).toHaveAttribute("data-previa", "rx-7600");
+    await expect(page.getByTestId("candidata-rx-7600")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("build mudou durante a prévia: a prévia é descartada", async ({ page, request }) => {
+    await abrirCena(page, id);
+    await trocarGpu(page);
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    const etapas = page.getByRole("navigation", { name: "Etapas" });
+    await etapas.getByRole("link", { name: "Peças" }).click();
+    await page.getByRole("row", { name: /NV3/ }).getByRole("button", { name: "Remover" }).click();
+    await expect(page.getByRole("row", { name: /NV3/ })).toHaveCount(0);
+    await etapas.getByRole("link", { name: "3D" }).click();
+    await expect(page.locator("canvas[data-alvo]")).toBeVisible();
+    await expect(page.getByTestId("selo-previa")).toHaveCount(0);
+    expect(await gpuDaBuild(request)).toContain(GPU);
+  });
+
+  test("peça travada não abre Trocar", async ({ page, request }) => {
+    await request.patch(`${API}/builds/${id}/itens/${GPU}`, { data: { travado: true } });
+    await abrirCena(page, id);
+    await linha(page, GPU).click();
+    await expect(page.getByTestId("trocar")).toBeDisabled();
+  });
+});

@@ -75,3 +75,10 @@ spec em [docs/SPEC-VISTA-3D-COMPLETA.md](docs/SPEC-VISTA-3D-COMPLETA.md). Cada m
 estimado. `POST /componentes/{id}/ficha` busca a página do fabricante e extrai os campos geométricos da ficha (fans,
 portas, baias), cada um com URL e dentro de uma faixa plausível; sem `SERPER_API_KEY` ou sem LLM, não roda e o seed
 é usado como está. O que a extração grava fica em memória e se perde ao reiniciar a API.
+
+Ao lado da cena fica o painel **Peças da build**: passar o mouse numa linha acende a peça na cena (e vice-versa), e
+clicar abre o detalhe com a ficha, a faixa e as ofertas de preço (as mesmas da aba Compra) e o motivo da escolha.
+**Trocar** lista as peças do mesmo tipo; clicar numa candidata mostra a build com ela no lugar, com o selo
+"Prévia: não aplicada", os conflitos e a diferença de preço. `POST /builds/{id}/cena/previa` monta essa cena sem gravar
+nada (sem LLM e sem rastro no Langfuse); só **Aplicar troca** (`POST /builds/{id}/trocar`) altera a build. Esc ou
+Cancelar descartam a prévia. Design em [docs/superpowers/specs/2026-11-13-cena-paineis-design.md](docs/superpowers/specs/2026-11-13-cena-paineis-design.md).

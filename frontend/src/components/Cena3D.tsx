@@ -285,7 +285,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
       {tutorial && total > 0 && (
         <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
       )}
-      <div className="cena" data-testid="cena" data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""}>
+      <div className="cena" data-testid="cena" data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}>
         {hover && <span className="etiqueta">{hover}</span>}
         {previa && <span className="selo-previa" data-testid="selo-previa">Prévia: não aplicada</span>}
         {mostraRegioes && regioes.map((r) => medida(r) && (
