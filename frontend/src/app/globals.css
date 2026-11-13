@@ -268,3 +268,6 @@ legend { color: var(--label); }
   .btn.pequeno, .btn.texto { height: 36px; }
   .segmentado button { height: 38px; }
 }
+
+/* Prévia de troca na cena: a troca ainda não foi aplicada */
+.selo-previa { position: absolute; top: 12px; right: 12px; z-index: 1; background: var(--pill-warning-bg); color: var(--pill-warning-ink); padding: 4px 10px; border-radius: var(--radius-control); font-size: var(--fs-small); font-weight: 600; pointer-events: none; }
