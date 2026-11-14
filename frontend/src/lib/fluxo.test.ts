@@ -69,6 +69,20 @@ describe("setas e caminho do ar", () => {
   });
 });
 
+describe("setas do radiador", () => {
+  it("ficam sobre as ventoinhas do próprio radiador (no topo ele vai para o lado do vidro)", () => {
+    const kraken = seed.componentes.find((x) => x.id === "clr-kraken-240")!.specs;
+    const lancool = seed.componentes.find((x) => x.id === "case-lancool-216")!.specs;
+    const f = fluxo([v("traseira", 0), v("frente", 0), v("frente", 1), v("frente", 2), v("topo", 0, "radiador"), v("topo", 1, "radiador")]);
+    const c: Cena = { ...base(f), pecas: [p("case", "gabinete", lancool), ...base(f).pecas.slice(1, 3), p("cooler", "cooler", kraken), base(f).pecas[4]] };
+    const caixas = montarCena(c);
+    const rad = caixas.find((x) => x.chave.endsWith(":radiador"))!;
+    const doRad = setasDoFluxo(caixas, f).filter((s) => s.sentido === "saida" && s.dir[1] === 1);
+    expect(doRad).toHaveLength(2);
+    for (const s of doRad) for (const k of [0, 2]) expect(Math.abs(s.pos[k] - rad.pos[k])).toBeLessThanOrEqual(rad.tam[k] / 2);
+  });
+});
+
 describe("textos do fluxo", () => {
   it("descrição, linhas do painel e o que muda na prévia", () => {
     const f = fluxo([v("traseira", 0), v("frente", 0), v("frente", 1), v("frente", 2), v("topo", 0)]);

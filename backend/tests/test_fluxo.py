@@ -153,3 +153,12 @@ def test_achados_concordam_com_o_fluxo(store):
                 assert ("fluxo:sem_entrada" in a) == (f.entrada == 0), chave
                 assert ("fluxo:pressao_negativa" in a) == (f.pressao == "negativa" and f.entrada > 0), chave
                 assert ("fluxo:poucas_fans" in a) == (len(f.ventoinhas) < f.recomendadas), chave
+
+
+def test_radiador_fica_com_a_face_inteira(store):
+    """A cena centraliza o radiador na face: nenhuma outra ventoinha vai para essa face (senão entra dentro dele)."""
+    f = calc(store, "case-lancool-216", "clr-kraken-240", "ext-fan-3pack")
+    assert not [v for v in f.ventoinhas if v.vaga == "topo" and v.origem != "radiador"]
+    assert sum(v.origem == "radiador" for v in f.ventoinhas) == 2
+    f = calc(store, "case-h5-flow", "clr-lf3-360", "ext-fan-3pack")
+    assert not [v for v in f.ventoinhas if v.vaga == "frente" and v.origem != "radiador"]

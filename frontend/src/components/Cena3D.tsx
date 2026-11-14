@@ -439,9 +439,9 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
     addEventListener("keydown", tecla);
     return () => removeEventListener("keydown", tecla);
   }, [aberto, previa, escNoPainel, fluxoOn]);
-  useEffect(() => {   // o fluxo vale para a build montada: abrir peça, explodir, passo a passo ou prévia desligam
-    if (fluxoOn && (aberto || explodida || tutorial || previa)) setFluxo(false);
-  }, [fluxoOn, aberto, explodida, tutorial, previa]);
+  // Ligar o fluxo (pelo botão ou pelo painel) monta a build; depois, abrir peça, explodir, passo a passo ou prévia desligam
+  useEffect(() => { if (fluxoOn) { setExplodida(false); setTutorial(false); setAberta(null); } }, [fluxoOn]);
+  useEffect(() => { if (fluxoOn && (aberto || explodida || tutorial || previa)) setFluxo(false); }, [aberto, explodida, tutorial, previa]);
   const fluxoVisivel = fluxoOn && !aberto && !explodida && !tutorial && !previa;
   const setas = useMemo(() => (fluxoVisivel ? setasDoFluxo(caixas, cena.fluxo) : []), [fluxoVisivel, caixas, cena.fluxo]);
   const caminhos = useMemo(() => (fluxoVisivel ? caminhosDoAr(caixas, cena.fluxo) : []), [fluxoVisivel, caixas, cena.fluxo]);

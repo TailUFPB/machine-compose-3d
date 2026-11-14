@@ -106,3 +106,37 @@ test.describe("fluxo de ar no painel", () => {
     await expect(page.getByTestId("diferenca-previa")).toContainText("Ventoinhas recomendadas");
   });
 });
+
+test.describe("fluxo de ar: casos de borda", () => {
+  test("clicar no painel com a build explodida monta a build e liga o fluxo", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await page.getByTestId("explodir").click();
+    await page.getByTestId("fluxo-painel").click();
+    await expect(cena(page)).toHaveAttribute("data-fluxo", "on");
+    await expect(page.getByTestId("explodir")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("Esc com régua e fluxo ligados tira um de cada vez, sem fechar nada", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await botao(page).click();
+    await page.getByTestId("folga-gpu").click();
+    await expect(cena(page)).toHaveAttribute("data-regua", "gpu");
+    await page.keyboard.press("Escape");
+    await expect(cena(page)).toHaveAttribute("data-regua", "");
+    await expect(cena(page)).toHaveAttribute("data-fluxo", "on");
+    await page.keyboard.press("Escape");
+    await expect(cena(page)).toHaveAttribute("data-fluxo", "off");
+    await expect(cena(page)).toHaveAttribute("data-aberta", "");
+  });
+
+  test("Leve com movimento reduzido mostra o fluxo parado, sem erro", async ({ page, request }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await qualidade(page, "leve");
+    const erros = await abrirCena(page, await criarBuild(request));
+    await botao(page).click();
+    await expect(cena(page)).toHaveAttribute("data-fluxo", "on");
+    await expect(cena(page)).toHaveAttribute("data-qualidade", "leve");
+    await page.waitForTimeout(1000);
+    expect(erros).toEqual([]);
+  });
+});

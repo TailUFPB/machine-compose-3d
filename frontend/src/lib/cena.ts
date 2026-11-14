@@ -485,11 +485,14 @@ const ancoraDaVaga = (v: Ventoinha) => (v.vaga === "traseira" ? "fan_traseiro" :
 export function setasDoFluxo(caixas: Caixa[], fluxo: Fluxo | null | undefined): SetaAr[] {
   const g = caixas.find((c) => c.tipo === "gabinete");
   if (!g?.modelo || !fluxo) return [];
+  const rad = caixas.find(ehRadiador);
   return fluxo.ventoinhas.flatMap((v) => {
-    const a = g.modelo!.ancoras[ancoraDaVaga(v)];
-    if (!a) return [];
+    // as do radiador ficam sobre as ventoinhas do próprio radiador (centralizado na face, e no topo puxado para o vidro)
+    const fanRad = v.origem === "radiador" ? rad?.modelo?.partes.find((s) => s.id === `fan-${v.indice}`) : undefined;
+    const a = fanRad ? undefined : g.modelo!.ancoras[ancoraDaVaga(v)];
+    if (!fanRad && !a) return [];
     const n = girar(NORMAL[v.vaga], g.rot);
-    return [{ pos: noMundo(g, a), dir: (v.sentido === "entrada" ? n.map((x) => -x || 0) : n) as Vec3, sentido: v.sentido }];
+    return [{ pos: fanRad ? noMundo(rad!, fanRad.pos) : noMundo(g, a!), dir: (v.sentido === "entrada" ? n.map((x) => -x || 0) : n) as Vec3, sentido: v.sentido }];
   });
 }
 

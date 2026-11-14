@@ -64,17 +64,19 @@ def calcular(pecas: dict[str, Componente], extras: list[tuple[Componente, int]])
         return None
     v, cooler = vagas(case), pecas.get("cooler")
     ocupadas: dict[tuple[str, int], str] = {}
-    if cooler and cooler.specs.get("refrigeracao") == "aio":   # o radiador fica com as vagas da face dele
-        face = "frente" if radiador_na_frente(cooler) else "topo"
+    bloqueada: str | None = None
+    if cooler and cooler.specs.get("refrigeracao") == "aio":
+        # o radiador fica centralizado na face (como a cena o desenha): a face inteira é dele, e só as ventoinhas dele contam
+        bloqueada = "frente" if radiador_na_frente(cooler) else "topo"
         n = cooler.specs.get("fans") or (cooler.specs.get("radiador_mm") or 0) // FAN_MM
-        for i in range(min(n, v[face])):
-            ocupadas[(face, i)] = "radiador"
+        for i in range(min(n, v[bloqueada])):
+            ocupadas[(bloqueada, i)] = "radiador"
 
     def ocupar(n: int, posicoes: tuple[str, ...], origem: str) -> None:
         for vaga in _ordem(v, posicoes):
             if n <= 0:
                 return
-            if vaga not in ocupadas:
+            if vaga not in ocupadas and vaga[0] != bloqueada:
                 ocupadas[vaga] = origem
                 n -= 1
 
