@@ -156,6 +156,60 @@ test.describe("celular", () => {
     await expect(cena(page)).toHaveAttribute("data-aberta", "");
   });
 
+  test("cabo ainda não ligado não engole o toque: no passo a passo, o toque acha o mesmo que o mouse", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await page.getByTestId("tutorial").click();
+    for (let i = 0; i < 4; i++) await page.getByTestId("proximo").click();   // placa, CPU, cooler e memória no lugar; cabos ainda não
+    await page.waitForTimeout(2000);
+    const c = await canvas(page);
+    const diferentes: string[] = [];
+    for (let i = 1; i < 8; i++) for (let j = 1; j < 8; j++) {
+      const p: [number, number] = [c.x + (c.width * i) / 8, c.y + (c.height * j) / 8];
+      await page.touchscreen.tap(c.x + 2, c.y + 2);   // limpa o toque anterior (canto vazio)
+      await page.mouse.move(...p);
+      await page.waitForTimeout(80);
+      const peloMouse = (await etiqueta(page).count()) ? await etiqueta(page).textContent() : null;
+      await page.mouse.move(c.x + c.width + 5, c.y - 5);   // mouse sai do canvas
+      await page.touchscreen.tap(...p);
+      await page.waitForTimeout(80);
+      const peloToque = (await etiqueta(page).count()) ? await etiqueta(page).textContent() : null;
+      if (peloMouse !== peloToque) diferentes.push(`${i},${j}: mouse ${peloMouse} · toque ${peloToque}`);
+    }
+    expect(diferentes).toEqual([]);
+  });
+
+  test("toque na prévia mostra o nome e não descarta a prévia", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request, ["case-nr200p"]));
+    await page.getByTestId("linha-rtx-5060-8g").click();
+    await page.getByTestId("trocar").click();
+    await page.getByTestId("ver-incompativeis").check();
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    await cena(page).locator("canvas").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1500);
+    const p = await tocarAteMostrar(page, false);
+    await page.touchscreen.tap(...p);   // segundo toque: na prévia não abre
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    const c = await canvas(page);
+    await page.touchscreen.tap(c.x + 6, c.y + 6);   // toque no vazio só apaga o nome
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId("selo-previa")).toBeVisible();
+    await expect(cena(page)).toHaveAttribute("data-previa", "rtx-4080s");
+  });
+
+  test("abrir outra peça pelos botões apaga o toque anterior", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await page.getByTestId("vista-lateral").click();
+    await page.waitForTimeout(1500);
+    await tocarAteMostrar(page, true);
+    await page.locator('[data-testid^="abrir-"]').last().click();
+    await expect(cena(page)).not.toHaveAttribute("data-aberta", "");
+    await page.waitForTimeout(300);
+    await expect(etiqueta(page)).toHaveCount(0);
+    await expect(linhaAtiva(page)).toHaveCount(0);
+  });
+
   test("dica de toque aparece no celular", async ({ page, request }) => {
     await abrirCena(page, await criarBuild(request));
     await expect(page.getByTestId("dica-toque")).toHaveText("Dois dedos giram e aproximam a cena.");

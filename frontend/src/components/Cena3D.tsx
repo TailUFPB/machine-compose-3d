@@ -19,12 +19,13 @@ const mm = (v: Vec3) => v.map((x) => x * ESCALA) as Vec3;
 const rotDe = (c: Caixa) => (c as Caixa & { rot?: Vec3 }).rot;   // Euler XYZ em torno do centro, quando o layout girar a peça
 const semRaio = () => null;
 
-/** Toque (dedo) num objeto que só mostra o nome: marca no pointerdown, avisa no clique e não deixa o toque passar adiante. */
-function useToque(onToque: () => void) {
+/** Toque (dedo) num objeto que só mostra o nome: marca no pointerdown, avisa no clique e não deixa o toque passar adiante.
+ *  `ativo` falso (cabo apagado: o raio do three acerta objeto invisível) deixa o toque seguir para o que está atrás. */
+function useToque(onToque: () => void, ativo: () => boolean = () => true) {
   const deDedo = useRef(false);
   return {
     onPointerDown: (e: { pointerType: string }) => { deDedo.current = e.pointerType === "touch"; },
-    onClick: (e: { stopPropagation: () => void }) => { if (deDedo.current) { e.stopPropagation(); onToque(); } },
+    onClick: (e: { stopPropagation: () => void }) => { if (deDedo.current && ativo()) { e.stopPropagation(); onToque(); } },
   };
 }
 
@@ -64,7 +65,7 @@ function Cabo3D({ c, visivel, reduzido, onHover, onToque }: { c: Cabo; visivel: 
   const mat = useMemo(() => new MeshLambertMaterial({ color: c.tipo === "mangueira" ? "#141a22" : c.raio > 2 ? "#5d6f86" : "#c8a04c" }), [c]);
   useEffect(() => () => { geo.dispose(); mat.dispose(); }, [geo, mat]);   // o three não libera sozinho o que vai por prop
   const grupo = useRef<Group>(null);
-  const toque = useToque(() => { if (mat.opacity >= 0.5) onToque(); });
+  const toque = useToque(onToque, () => mat.opacity >= 0.5);
   useFrame(({ clock }, dt) => {
     const alvo = visivel(clock.elapsedTime) ? 1 : 0;
     let op = reduzido ? alvo : mat.opacity + (alvo - mat.opacity) * (1 - Math.exp((-dt * 3) / FADE));
@@ -297,11 +298,12 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
     if (desceAuto(amostras.current)) { desceuNaVisita = true; setNivel("leve"); }
   };
   const leve = nivel === "leve";
+  const ultimoDedo = useRef(false);   // o último toque no canvas foi de dedo (o clique no vazio não traz o tipo em todo navegador)
   const limparToque = () => { if (toque?.peca) onDestaque?.(null); setToque(null); };
   /** Toque numa peça: com ela aberta, só o nome da subpeça; segundo toque na mesma abre (fora do passo a passo). */
   const tocar = (c: Caixa) => (nome: string) => {
     if (aberta === c.chave) { setToque({ chave: c.chave, nome, peca: null }); return; }
-    if (toque?.chave === c.chave && !tutorial) { limparToque(); setAberta(c.chave); return; }
+    if (toque?.chave === c.chave && !tutorial && !previa) { limparToque(); setAberta(c.chave); return; }   // na prévia, abrir descartaria a prévia
     const peca = c.tipo === "gabinete" ? null : c.id;
     if (peca || toque?.peca) onDestaque?.(peca);
     setToque({ chave: c.chave, nome, peca });
@@ -383,7 +385,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
     addEventListener("keydown", tecla);
     return () => removeEventListener("keydown", tecla);
   }, [aberto, previa, escNoPainel]);
-  useEffect(() => { limparToque(); }, [cena, tutorial, explodida, passo]);   // o toque não sobrevive à cena mudar
+  useEffect(() => { limparToque(); }, [cena, tutorial, explodida, passo, aberta]);   // o toque não sobrevive à cena mudar
   useEffect(() => {   // a prévia mostra a build montada: explodida e passo a passo escondem as regiões de conflito
     if (previa) { setExplodida(false); setTutorial(false); }
   }, [previa?.para]);
@@ -468,7 +470,8 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         {mostraRegioes && regioes.map((r) => medida(r) && (
           <span key={r.conflitoId} ref={(el) => { etiquetas.current[r.conflitoId] = el; }} className="medida" data-testid="medida-cena">{medida(r)}</span>
         ))}
-        <Canvas dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerMissed={() => { setAberta(null); limparToque(); }}
+        <Canvas dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
+          onPointerMissed={() => { limparToque(); if (!(previa && ultimoDedo.current)) setAberta(null); }}   // na prévia, o dedo no vazio só apaga o nome
           onCreated={({ gl }) => {   // a descrição textual fica ligada ao próprio canvas
             gl.domElement.setAttribute("role", "img");
             gl.domElement.setAttribute("aria-label", "Montagem 3D da build");
