@@ -8,6 +8,7 @@ import { CatmullRomCurve3, type Group, type Mesh, MeshLambertMaterial, type Mesh
 import type { Cena, Folga } from "@/lib/api";
 import { type Cabo, type Caixa, DIRECAO, type EstadoPasso, type Regiao, type Regua, type Vec3, VISTA_DA_FOLGA, type Vista, descricaoCena, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito } from "@/lib/cena";
 import { progressoExplosao } from "@/lib/peca";
+import { CARENCIA_S, type Escolha, type Nivel, desceAuto, guardarEscolha, lerEscolha, nivelInicial, rotuloQualidade } from "@/lib/qualidade";
 import Peca3D from "./Peca3D";
 
 const ESCALA = 1 / 100;   // mm -> unidades da cena
@@ -97,7 +98,27 @@ const ROTULO: Partial<Record<Caixa["tipo"], string>> = { gpu: "GPU", placa_mae: 
 const distanciaDe = (maior: number) => maior * ESCALA * 1.5 + 2.2;
 const DE_FORA = 4.5;   // distância mínima ao focar algo dentro do gabinete: a câmera fica do lado de fora do vidro
 
-/** Centro e maior lado do envelope de um conjunto de caixas (mm). */
+const NOME_QUALIDADE: Record<Escolha, string> = { auto: "Auto", alta: "Alta", leve: "Leve" };
+/** O Auto desceu para Leve nesta visita: vale para as próximas builds também (a cena remonta a cada build). */
+let desceuNaVisita = false;
+
+/** Amostra a taxa de quadros a cada 1 s, depois da carência; aba em segundo plano (sem quadros) não conta. */
+function Medidor({ onAmostra }: { onAmostra: (qps: number) => void }) {
+  const janela = useRef<{ t0: number; n: number } | null>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    if (t < CARENCIA_S) return;
+    const j = janela.current;
+    if (!j) { janela.current = { t0: t, n: 0 }; return; }
+    j.n++;
+    const dt = t - j.t0;
+    if (dt < 1) return;
+    if (dt < 2) onAmostra(j.n / dt);   // janela esticada = aba parada; descarta
+    janela.current = { t0: t, n: 0 };
+  });
+  return null;
+}
+
 /** Leva o alvo da órbita (e a distância da câmera) até o foco por ~1,2 s depois de cada troca; depois solta. `vez` refaz o mesmo foco. */
 /** Leva o alvo da órbita (e a distância da câmera) até o foco por ~1,2 s depois de cada troca; depois solta. `vez` refaz o mesmo foco.
  *  Com `direcao` (vista pronta), a câmera também vai para `alvo + direcao × distancia` e encaixa exata no fim.
@@ -237,6 +258,20 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
     return (previa ? "Prévia, não aplicada. " : "") + (vista !== "livre" ? `Vista ${NOME_VISTA[vista].toLowerCase()}. ` : "") + descricaoCena(cena, caixas, regioes) + daRegua;
   }, [cena, caixas, regioes, previa, vista, folga]);
   const reduzido = useMemo(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  const deToque = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
+  // Qualidade: escolha guardada no navegador; no Auto, o nível começa pelo tipo de ponteiro e só desce (nunca sobe sozinho)
+  const [escolha, setEscolha] = useState<Escolha>(lerEscolha);
+  const [nivel, setNivel] = useState<Nivel>(() => (escolha === "auto" && desceuNaVisita ? "leve" : nivelInicial(escolha, deToque)));
+  const amostras = useRef<number[]>([]);
+  const escolher = (e: Escolha) => {
+    setEscolha(e); guardarEscolha(e); amostras.current = [];
+    setNivel(e === "auto" && desceuNaVisita ? "leve" : nivelInicial(e, deToque));
+  };
+  const amostrar = (qps: number) => {
+    amostras.current = [...amostras.current.slice(-5), qps];
+    if (desceAuto(amostras.current)) { desceuNaVisita = true; setNivel("leve"); }
+  };
+  const leve = nivel === "leve";
   const destaqueCor = useMemo(() => (typeof window !== "undefined" && getComputedStyle(document.documentElement).getPropertyValue("--hue").trim()) || "#66c0f4", []);
   /** Hover na cena: etiqueta com o nome e aviso ao painel de qual peça está sob o mouse. */
   const hoverDe = (c: Caixa) => (nome: string | null) => { setHover(nome); onDestaque?.(nome ? c.id : null); };
@@ -351,6 +386,13 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
               <button className="btn" data-testid="proximo" onClick={() => setPasso(Math.min(total - 1, passo + 1))} disabled={passo >= total - 1}>Próximo</button>
             </>
           )}
+          <div className="vistas" role="group" aria-label="Qualidade">
+            <span aria-hidden>Qualidade</span>
+            {(["auto", "alta", "leve"] as const).map((q) => (
+              <button key={q} className="btn pequeno" data-testid={`qualidade-${q}`} aria-pressed={escolha === q} onClick={() => escolher(q)}>{NOME_QUALIDADE[q]}</button>
+            ))}
+            {escolha === "auto" && <span className="num">{rotuloQualidade(escolha, nivel)}</span>}
+          </div>
         </div>
         {cena.conflitos.length > 0 && <span className="pill neg">{cena.conflitos.length} {cena.conflitos.length === 1 ? "conflito" : "conflitos"} em vermelho</span>}
       </div>
@@ -375,7 +417,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
       {tutorial && total > 0 && (
         <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
       )}
-      <div className="cena" data-testid="cena" data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
+      <div className="cena" data-testid="cena" data-qualidade={nivel} data-escolha={escolha} data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
         data-vista={vista} data-regua={regua ? folga!.id : ""}>
         {regua && folga && ([
           ["peca", `${ROTULO[cena.pecas.find((p) => p.id === folga.peca)?.tipo ?? "gpu"] ?? "peça"} ${folga.tamanho_mm} mm`, "medida regua"],
@@ -389,7 +431,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         {mostraRegioes && regioes.map((r) => medida(r) && (
           <span key={r.conflitoId} ref={(el) => { etiquetas.current[r.conflitoId] = el; }} className="medida" data-testid="medida-cena">{medida(r)}</span>
         ))}
-        <Canvas camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerMissed={() => setAberta(null)}
+        <Canvas dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerMissed={() => setAberta(null)}
           onCreated={({ gl }) => {   // a descrição textual fica ligada ao próprio canvas
             gl.domElement.setAttribute("role", "img");
             gl.domElement.setAttribute("aria-label", "Montagem 3D da build");
@@ -403,13 +445,14 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
               encaixe={tutorial ? (t) => estadoEm(t).pecas[c.chave]?.encaixe ?? 0 : 0}
               moveis={tutorial ? (t) => estadoEm(t).pecas[c.chave]?.moveis : undefined}
               onClick={() => !tutorial && setAberta(alvo === c ? null : c.chave)} onHover={hoverDe(c)}
-              destacada={c.tipo !== "gabinete" && (destaque === c.id || previa?.para === c.id)} corDestaque={destaqueCor} />
+              destacada={c.tipo !== "gabinete" && (destaque === c.id || previa?.para === c.id)} corDestaque={destaqueCor} leve={leve} />
           ) : (
             <Peca key={c.chave} c={c} posicao={posicaoDe(c)} apagada={aberto && !abreGab} onHover={hoverDe(c)} />
           ))}
           {cabos.map((c) => <Cabo3D key={c.id} c={c} visivel={caboVisivel(c)} reduzido={reduzido} onHover={setHover} />)}
           {mostraRegioes && regioes.map((r) => <Regiao3D key={r.conflitoId} r={r} cor={negativa} etiqueta={() => etiquetas.current[r.conflitoId] ?? null} />)}
           {/* mexer com o mouse só marca Livre: mudar o pedido mudaria a chave do Foco e reiniciaria a animação (puxão) */}
+          {escolha === "auto" && !leve && <Medidor onAmostra={amostrar} />}
           <OrbitControls makeDefault onStart={() => setVista("livre")} />
           <Foco alvo={foco} distancia={distancia} vez={`${focado?.vez ?? 0}:${direcao ? pedido?.vez ?? 0 : 0}`} direcao={direcao} />
           {regua && folga && <Regua3D r={regua} estado={folga.estado} etiquetas={etiquetasRegua} />}

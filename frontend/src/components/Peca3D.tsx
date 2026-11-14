@@ -10,6 +10,7 @@ import { BoxGeometry, type BufferGeometry, CatmullRomCurve3, Color, CylinderGeom
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Caixa, Vec3 } from "../lib/cena";
 import { type Forma, type Lote, type Modelo, type Sub, type Tom, lotes, progressoExplosao } from "../lib/peca";
+import { partesVisiveis } from "../lib/qualidade";
 
 const TINTA = "#0b131c", ZERO: Vec3 = [0, 0, 0];
 const PULSO = new Color("#ff2a1a");   // conflito: tem prioridade sobre o destaque
@@ -83,7 +84,7 @@ function geometriaSub(s: Sub): BufferGeometry {
 }
 
 /** Malha única de um lote: triângulos fundidos, segmentos do contorno e as faixas de triângulos de cada subpeça. */
-export function malhaLote(l: Lote) {
+export function malhaLote(l: Lote, comContorno = true) {
   const geos: BufferGeometry[] = [], contorno: number[] = [], faixas: { fim: number; nome: string }[] = [];
   let tri = 0;
   for (const s of l.subs) {
@@ -91,12 +92,12 @@ export function malhaLote(l: Lote) {
     geos.push(g);
     tri += g.attributes.position.count / 3;
     faixas.push({ fim: tri, nome: rotulo(s) });
-    if (s.forma.tipo !== "grade") for (const v of new EdgesGeometry(g, 20).attributes.position.array) contorno.push(v);   // pinos e trilhas ficam sem contorno
+    if (comContorno && s.forma.tipo !== "grade") for (const v of new EdgesGeometry(g, 20).attributes.position.array) contorno.push(v);   // pinos e trilhas ficam sem contorno
   }
   return { geo: mergeGeometries(geos), contorno, faixas };
 }
 
-function Fan({ s, mat, spin }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]> }) {
+function Fan({ s, mat, spin, contorno }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]>; contorno: boolean }) {
   const emX = s.forma.eixo === "x";
   const r = s.forma.raio, t = emX ? s.tam[0] : s.tam[1], n = s.forma.pas;
   const pa = useMemo(() => geometriaPa(r), [r]);
@@ -106,20 +107,20 @@ function Fan({ s, mat, spin }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: T
     <group rotation={emX ? [0, 0, -Math.PI / 2] : [0, 0, 0]}>
       <mesh material={mat("lo")} rotation={[Math.PI / 2, 0, 0]} userData={ud}>
         <torusGeometry args={[r, 1.6, 8, 48]} />
-        <Edges color={TINTA} threshold={40} />
+        {contorno && <Edges color={TINTA} threshold={40} />}
       </mesh>
       <group ref={(g) => { if (!g) return; spin.current.push(g); return () => { spin.current = spin.current.filter((x) => x !== g); }; }}>
         <mesh material={mat("mid")} userData={ud}>
           <cylinderGeometry args={[r * 0.32, r * 0.32, t * 0.8, 32]} />
-          <Edges color={TINTA} threshold={30} />
+          {contorno && <Edges color={TINTA} threshold={30} />}
         </mesh>
         <mesh material={mat("lit")} position={[0, -t * 0.4 - 0.15, 0]} userData={ud}>
           <cylinderGeometry args={[r * 0.22, r * 0.22, 0.3, 32]} />
-          <Edges color={TINTA} threshold={30} />
+          {contorno && <Edges color={TINTA} threshold={30} />}
         </mesh>
         {Array.from({ length: n }, (_, i) => (
           <mesh key={i} geometry={pa} material={mat("hi")} rotation={[0, (i / n) * Math.PI * 2, 0]} userData={ud}>
-            <Edges color={TINTA} threshold={30} geometry={pa} />
+            {contorno && <Edges color={TINTA} threshold={30} geometry={pa} />}
           </mesh>
         ))}
       </group>
@@ -131,11 +132,12 @@ const rotulo = (s: Sub) => s.fonte === "estimado" ? `${s.nome} (estimado)` : s.f
 
 const semRaio = () => null;
 
-function Parte({ l, mat, spin }: { l: Lote; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]> }) {
+/** `contorno` falso no modo Leve (peça fechada): sem as linhas de tinta, que custam desenho e montagem. */
+function Parte({ l, mat, spin, contorno }: { l: Lote; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]>; contorno: boolean }) {
   const s = l.subs[0], fan = s.forma.tipo === "fan";
-  const m = useMemo(() => (fan ? null : malhaLote(l)), [l, fan]);
+  const m = useMemo(() => (fan ? null : malhaLote(l, contorno)), [l, fan, contorno]);
   useEffect(() => () => m?.geo.dispose(), [m]);
-  if (!m) return <Fan s={s as Sub & { forma: { tipo: "fan" } }} mat={mat} spin={spin} />;
+  if (!m) return <Fan s={s as Sub & { forma: { tipo: "fan" } }} mat={mat} spin={spin} contorno={contorno} />;
   // o vidro não intercepta cliques nas peças de dentro
   return (
     <mesh geometry={m.geo} material={mat(s.tom)} userData={{ faixas: m.faixas }} {...(s.tom === "vidro" ? { raycast: semRaio } : {})}>
@@ -159,12 +161,15 @@ interface Props {
   corDestaque?: string;
   moveis?: (t: number) => string[] | undefined;   // prefixos de id das subpeças a que `encaixe` se aplica; ausente = todas
   encaixe?: number | ((t: number) => number);   // subpeças móveis (travas, alavanca, parafusos): 0 = fechadas (padrão), 1 = abertas
+  leve?: boolean;   // qualidade Leve: fechada, sem pinos/contatos/trilhas e sem contorno (o gabinete mantém o contorno)
 }
 
-export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0, moveis, destacada = false, corDestaque = "#66c0f4" }: Props) {
+export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0, moveis, destacada = false, corDestaque = "#66c0f4", leve = false }: Props) {
   const destaque = useMemo(() => new Color(corDestaque), [corDestaque]);
   const maxOrdem = Math.max(...modelo.partes.map((p) => p.ordem));
-  const grupos = useMemo(() => lotes(modelo.partes), [modelo]);
+  const enxuta = leve && !aberto;   // só muda a malha quando entra ou sai do Leve fechado (em Alta, abrir não refaz nada)
+  const grupos = useMemo(() => lotes(partesVisiveis(modelo.partes, enxuta, false)), [modelo, enxuta]);
+  const contorno = !enxuta || c.tipo === "gabinete";
   const mats = useMemo(() => {
     const m = {} as Record<Tom, MeshLambertMaterial>;
     for (const t of Object.keys(COR) as Tom[]) m[t] = new MeshLambertMaterial({ color: COR[t], flatShading: true, emissive: "#ff2a1a", emissiveIntensity: 0 });
@@ -216,7 +221,7 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
       onPointerOut={() => onHover(null)}>
       {grupos.map((l, i) => (
         <group key={l.subs[0].id} ref={(o) => { partes.current[i] = o; }} position={l.pos}>
-          <Parte l={l} mat={mat} spin={spin} />
+          <Parte l={l} mat={mat} spin={spin} contorno={contorno} />
         </group>
       ))}
     </group>

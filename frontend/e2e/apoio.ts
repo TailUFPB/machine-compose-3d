@@ -30,3 +30,8 @@ export async function abrirCena(page: Page, id: string): Promise<string[]> {
   await expect(page.locator("canvas[data-alvo]")).toBeVisible();   // a câmera já rodou ao menos um quadro
   return erros;
 }
+
+/** Fixa a qualidade da cena (chave do localStorage) antes de a página carregar. */
+export async function qualidade(page: Page, escolha: "auto" | "alta" | "leve"): Promise<void> {
+  await page.addInitScript((e) => { try { localStorage.setItem("cena-qualidade", e); } catch { /* sem armazenamento */ } }, escolha);
+}

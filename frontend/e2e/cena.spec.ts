@@ -1,7 +1,7 @@
 // Cena 3D no navegador: carrega sem erro, abre e fecha peça e build explodida (clique e teclado), conflito leva a câmera,
 // passo a passo avança e volta, controles cabem em 390 px e a taxa de quadros fica acima do piso.
 import { type Page, expect, test } from "@playwright/test";
-import { abrirCena, criarBuild } from "./apoio";
+import { abrirCena, criarBuild, qualidade } from "./apoio";
 
 const pecas = (page: Page) => page.getByRole("group", { name: "Abrir peça em vista explodida" });
 
@@ -94,6 +94,7 @@ test.describe("build do seed", () => {
   });
 
   test("taxa de quadros com a build completa, parada e girando", async ({ page }) => {
+    await qualidade(page, "alta");   // o piso vale para o nível mais pesado
     await abrirCena(page, id);
     await page.waitForTimeout(2000);   // câmera assentada, malhas compiladas
     const renderizador = await page.evaluate(() => {
