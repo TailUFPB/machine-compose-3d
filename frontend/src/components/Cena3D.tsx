@@ -1,12 +1,12 @@
 "use client";
 // Cena 3D paramétrica (React Three Fiber): build montada, explodida ou passo a passo.
 // Conflito físico vira região vermelha com a medida do excesso; a peça em conflito pulsa.
-import { Edges, OrbitControls } from "@react-three/drei";
+import { Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { type MutableRefObject, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CatmullRomCurve3, type Group, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, TubeGeometry, Vector3 } from "three";
-import type { Cena } from "@/lib/api";
-import { type Cabo, type Caixa, type EstadoPasso, type Regiao, type Vec3, descricaoCena, envelope, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito } from "@/lib/cena";
+import type { Cena, Folga } from "@/lib/api";
+import { type Cabo, type Caixa, DIRECAO, type EstadoPasso, type Regiao, type Regua, type Vec3, VISTA_DA_FOLGA, type Vista, descricaoCena, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito } from "@/lib/cena";
 import { progressoExplosao } from "@/lib/peca";
 import Peca3D from "./Peca3D";
 
@@ -92,30 +92,77 @@ function Regiao3D({ r, cor, etiqueta }: { r: Regiao; cor: string; etiqueta: () =
 }
 
 const CAM_INICIAL = new Vector3(2.4, 1.8, 7);   // de frente para o vidro lateral
+const NOME_VISTA: Record<Vista, string> = { livre: "Livre", frente: "Frente", lateral: "Lateral", topo: "Topo" };
 const ROTULO: Partial<Record<Caixa["tipo"], string>> = { gpu: "GPU", placa_mae: "placa-mãe", memoria: "memória", cpu: "CPU", cooler: "cooler", armazenamento: "armazenamento", fonte: "fonte", gabinete: "gabinete" };
 const distanciaDe = (maior: number) => maior * ESCALA * 1.5 + 2.2;
 const DE_FORA = 4.5;   // distância mínima ao focar algo dentro do gabinete: a câmera fica do lado de fora do vidro
 
 /** Centro e maior lado do envelope de um conjunto de caixas (mm). */
 /** Leva o alvo da órbita (e a distância da câmera) até o foco por ~1,2 s depois de cada troca; depois solta. `vez` refaz o mesmo foco. */
-function Foco({ alvo, distancia, vez = 0 }: { alvo: Vec3; distancia: number; vez?: number }) {
-  const controls = useThree((s) => s.controls) as unknown as { target: Vector3; update: () => void } | null;
+/** Leva o alvo da órbita (e a distância da câmera) até o foco por ~1,2 s depois de cada troca; depois solta. `vez` refaz o mesmo foco.
+ *  Com `direcao` (vista pronta), a câmera também vai para `alvo + direcao × distancia` e encaixa exata no fim.
+ *  Arrastar com o mouse interrompe a animação: a câmera nunca puxa de volta enquanto a pessoa gira. */
+function Foco({ alvo, distancia, vez = 0, direcao }: { alvo: Vec3; distancia: number; vez?: number | string; direcao?: Vec3 }) {
+  const controls = useThree((s) => s.controls) as unknown as { target: Vector3; update: () => void; addEventListener: (e: string, f: () => void) => void; removeEventListener: (e: string, f: () => void) => void } | null;
   const tela = useThree((s) => s.gl.domElement);
-  const desde = useRef<{ chave: string; t: number }>({ chave: "", t: 0 });
-  const chave = `${alvo.join()}|${distancia}|${vez}`;
+  const desde = useRef<{ chave: string; t: number; fim: boolean }>({ chave: "", t: 0, fim: false });
+  const chave = `${alvo.join()}|${distancia}|${vez}|${direcao?.join() ?? ""}`;
   const dir = useMemo(() => new Vector3(), []);
+  useEffect(() => {
+    if (!controls) return;
+    const parar = () => { desde.current.fim = true; };
+    controls.addEventListener("start", parar);
+    return () => controls.removeEventListener("start", parar);
+  }, [controls]);
   useFrame(({ camera, clock }, dt) => {
     if (!controls) return;
-    if (desde.current.chave !== chave) desde.current = { chave, t: clock.elapsedTime };
-    if (clock.elapsedTime - desde.current.t > 1.2) return;
-    const k = 1 - Math.exp(-dt * 5);
+    if (desde.current.chave !== chave) desde.current = { chave, t: clock.elapsedTime, fim: false };
+    if (desde.current.fim) return;
+    const acabou = clock.elapsedTime - desde.current.t > 1.2;
+    const k = acabou ? 1 : 1 - Math.exp(-dt * 5);   // no fim encaixa exato (a vista Livre volta à posição inicial)
     controls.target.lerp(new Vector3(...alvo), k);
-    dir.copy(camera.position).sub(controls.target).normalize().multiplyScalar(distancia);
+    if (direcao) dir.set(...direcao).normalize().multiplyScalar(distancia);
+    else dir.copy(camera.position).sub(controls.target).normalize().multiplyScalar(distancia);
     camera.position.lerp(dir.add(controls.target), k);
     controls.update();
+    if (acabou) desde.current.fim = true;
     tela.dataset.alvo = controls.target.toArray().map((v) => v.toFixed(2)).join();   // onde a câmera olha (teste de navegador)
+    tela.dataset.camera = camera.position.toArray().map((v) => v.toFixed(2)).join();
   });
   return null;
+}
+
+const COR_REGUA = { peca: "#dfe8ef", sobra: "#a4d007", passa: "#ff6b5e" };   // --text, --positive, --negative
+const TRACO = 8;   // mm das marcas nas pontas
+
+/** Régua de folga: o trecho da peça, o que sobra (ou passa) até o limite, marcas nas pontas e rótulos em mm. */
+function Regua3D({ r, etiquetas }: { r: Regua; etiquetas: MutableRefObject<Record<string, HTMLElement | null>> }) {
+  const ponto = (mmAoLongo: number, desvio = 0): Vec3 => {
+    const p: Vec3 = [...r.inicio];
+    p[r.eixo] += r.sentido * mmAoLongo;
+    p[1] += desvio;
+    return mm(p);
+  };
+  const ate = Math.min(r.peca_mm, r.limite_mm), resto = r.peca_mm <= r.limite_mm ? COR_REGUA.sobra : COR_REGUA.passa;
+  const marcas = [0, r.peca_mm, r.limite_mm].map((d) => [ponto(d, -TRACO), ponto(d, TRACO)] as [Vec3, Vec3]);
+  const rotulos: [string, number][] = [["peca", r.peca_mm / 2], ["resto", (r.peca_mm + r.limite_mm) / 2], ["limite", r.limite_mm]];
+  const v = useMemo(() => new Vector3(), []);
+  useFrame(({ camera, size }) => {
+    for (const [k, d] of rotulos) {
+      const el = etiquetas.current[k];
+      if (!el) continue;
+      v.set(...ponto(d, k === "limite" ? TRACO * 3 : 0)).project(camera);
+      el.style.visibility = v.z < 1 ? "visible" : "hidden";
+      el.style.transform = `translate(${((v.x + 1) / 2) * size.width}px, ${((1 - v.y) / 2) * size.height}px) translate(-50%, -130%)`;
+    }
+  });
+  return (
+    <group renderOrder={12}>
+      <Line points={[ponto(0), ponto(ate)]} color={COR_REGUA.peca} lineWidth={3} depthTest={false} />
+      <Line points={[ponto(ate), ponto(Math.max(r.peca_mm, r.limite_mm))]} color={resto} lineWidth={3} depthTest={false} />
+      {marcas.map((m, i) => <Line key={i} points={m} color={i === 1 ? COR_REGUA.peca : resto} lineWidth={2} depthTest={false} />)}
+    </group>
+  );
 }
 
 /** De onde vêm os dados da peça aberta: campos com ficha do fabricante (link) e itens estimados. */
@@ -148,13 +195,14 @@ interface Props {
   previa?: { para: string } | null;
   /** Esc é do painel (prévia aberta ou carregando): a cena não fecha a peça aberta por baixo. */
   escNoPainel?: boolean;
+  /** Folga com régua ativa (escolhida no painel): leva a câmera à vista dela e desenha a régua. */
+  folga?: Folga | null;
 }
 
-export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = null, onDestaque, previa = null, escNoPainel = false }: Props) {
+export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = null, onDestaque, previa = null, escNoPainel = false, folga = null }: Props) {
   const caixas = useMemo(() => montarCena(cena), [cena]);
   const cabos = useMemo(() => montarCabos(caixas), [caixas]);
   const regioes = useMemo(() => regioesDeConflito(caixas, cena.conflitos), [caixas, cena]);
-  const descricao = useMemo(() => (previa ? "Prévia, não aplicada. " : "") + descricaoCena(cena, caixas, regioes), [cena, caixas, regioes, previa]);
   const idDescricao = useId();
   const [tutorial, setTutorial] = useState(false);
   const [passo, setPasso] = useState(0);
@@ -164,6 +212,26 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
   const setAberta = (chave: string | null) => { if (abertaProp === undefined) setAbertaLocal(chave); onAberta?.(chave); };
   const [focado, setFocado] = useState<{ id: string; vez: number } | null>(null);   // conflito para onde a câmera foi
   const [hover, setHover] = useState<string | null>(null);
+  // Vista pronta: `pedido` anima a câmera uma vez (vez); arrastar com o mouse volta a "livre" sem animar
+  const [vista, setVista] = useState<Vista>("livre");
+  const [pedido, setPedido] = useState<{ vista: Vista; vez: number } | null>(null);
+  const pedirVista = (v: Vista) => { setVista(v); setPedido((p) => ({ vista: v, vez: (p?.vez ?? 0) + 1 })); };
+  const antesDaRegua = useRef<Vista | null>(null);
+  const etiquetasRegua = useRef<Record<string, HTMLElement | null>>({});
+  useEffect(() => {   // régua ligada: vai para a vista da medida; desligada: volta à vista de antes
+    if (folga) {
+      if (antesDaRegua.current === null) antesDaRegua.current = vista;
+      pedirVista(VISTA_DA_FOLGA[folga.id]);
+    } else if (antesDaRegua.current !== null) {
+      pedirVista(antesDaRegua.current);
+      antesDaRegua.current = null;
+    }
+  }, [folga?.id]);
+  const descricao = useMemo(() => {
+    const nome = (id: string) => cena.pecas.find((p) => p.id === id)?.nome ?? id;
+    const daRegua = folga ? ` Régua: ${nome(folga.peca)} ${folga.tamanho_mm} mm, limite ${folga.limite_mm} mm, ${folga.sobra_mm < 0 ? `passa ${-folga.sobra_mm}` : `sobram ${folga.sobra_mm}`} mm.` : "";
+    return (previa ? "Prévia, não aplicada. " : "") + (vista !== "livre" ? `Vista ${NOME_VISTA[vista].toLowerCase()}. ` : "") + descricaoCena(cena, caixas, regioes) + daRegua;
+  }, [cena, caixas, regioes, previa, vista, folga]);
   const reduzido = useMemo(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const destaqueCor = useMemo(() => (typeof window !== "undefined" && getComputedStyle(document.documentElement).getPropertyValue("--hue").trim()) || "#66c0f4", []);
   /** Hover na cena: etiqueta com o nome e aviso ao painel de qual peça está sob o mouse. */
@@ -207,6 +275,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
 
   // Para onde a câmera olha: peça aberta, peça do passo, build explodida, conflito clicado ou a build inteira.
   let foco: Vec3 = [0, 0, 0], distancia = CAM_INICIAL.length(), f: ReturnType<typeof focoDaPrevia> = null;
+  let direcao: Vec3 | undefined;
   const doPasso = tutorial ? caixas.filter((c) => c.tipo !== "gabinete" && c.tipo === cena.passos[passo]?.tipo) : [];
   const conflito = cena.conflitos.find((c) => c.id === focado?.id);
   if (alvo) {
@@ -226,10 +295,14 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
     const p = caixas.find((c) => c.tipo !== "gabinete" && conflito.itens.includes(c.id)) ?? caixas.find((c) => conflito.itens.includes(c.id));
     if (r) { foco = mm(r.centro); distancia = Math.max(DE_FORA, distanciaDe(Math.max(...r.tam))); }
     else if (p) { foco = mm(p.pos); distancia = Math.max(DE_FORA, distanciaDe(Math.max(...p.tam))); }
+  }  if (!alvo && !doPasso.length && !explodida && !(previa && f) && !(conflito && !tutorial) && pedido) {
+    direcao = pedido.vista === "livre" ? CAM_INICIAL.toArray() as Vec3 : DIRECAO[pedido.vista];   // vista pronta: gabinete inteiro
   }
+
 
   const aberto = alvo != null;
   const mostraRegioes = !tutorial && !explodida && !aberto;   // as regiões valem para a build montada
+  const regua = folga && mostraRegioes && !previa ? reguaDe(folga, caixas) : null;
   const etiquetas = useRef<Record<string, HTMLElement | null>>({});
   useEffect(() => {   // Esc fecha a peça aberta; sem peça aberta, desfaz a build explodida
     const tecla = (e: KeyboardEvent) => { if (e.key === "Escape" && !previa && !escNoPainel) aberto ? setAberta(null) : setExplodida(false); };   // na prévia, Esc é do painel (cancela)
@@ -259,6 +332,14 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
             <button className="btn" data-testid="explodir" aria-pressed={explodida} onClick={() => { setExplodida(!explodida); setAberta(null); setFocado(null); }}>
               Explodir build
             </button>
+          )}
+          {!tutorial && (
+            <div className="vistas" role="group" aria-label="Vista">
+              <span aria-hidden>Vista</span>
+              {(["livre", "frente", "lateral", "topo"] as const).map((v) => (
+                <button key={v} className="btn pequeno" data-testid={`vista-${v}`} aria-pressed={vista === v} onClick={() => pedirVista(v)}>{NOME_VISTA[v]}</button>
+              ))}
+            </div>
           )}
           {tutorial && (
             <>
@@ -290,7 +371,15 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
       {tutorial && total > 0 && (
         <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
       )}
-      <div className="cena" data-testid="cena" data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}>
+      <div className="cena" data-testid="cena" data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
+        data-vista={vista} data-regua={regua ? folga!.id : ""}>
+        {regua && folga && ([
+          ["peca", `${ROTULO[cena.pecas.find((p) => p.id === folga.peca)?.tipo ?? "gpu"] ?? "peça"} ${folga.tamanho_mm} mm`, "medida regua"],
+          ["resto", folga.sobra_mm < 0 ? `passa ${-folga.sobra_mm} mm` : `sobram ${folga.sobra_mm} mm`, `medida regua ${folga.sobra_mm < 0 ? "neg" : "pos"}`],
+          ["limite", `cabe ${folga.limite_mm} mm`, "medida regua"],
+        ] as const).map(([k, texto, classe]) => (
+          <span key={k} ref={(el) => { etiquetasRegua.current[k] = el; }} className={classe} data-testid="regua-medida">{texto}</span>
+        ))}
         {hover && <span className="etiqueta">{hover}</span>}
         {previa && <span className="selo-previa" data-testid="selo-previa">Prévia: não aplicada</span>}
         {mostraRegioes && regioes.map((r) => medida(r) && (
@@ -316,8 +405,9 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           ))}
           {cabos.map((c) => <Cabo3D key={c.id} c={c} visivel={caboVisivel(c)} reduzido={reduzido} onHover={setHover} />)}
           {mostraRegioes && regioes.map((r) => <Regiao3D key={r.conflitoId} r={r} cor={negativa} etiqueta={() => etiquetas.current[r.conflitoId] ?? null} />)}
-          <OrbitControls makeDefault />
-          <Foco alvo={foco} distancia={distancia} vez={focado?.vez} />
+          <OrbitControls makeDefault onStart={() => { setPedido(null); setVista("livre"); }} />
+          <Foco alvo={foco} distancia={distancia} vez={`${focado?.vez ?? 0}:${direcao ? pedido?.vez ?? 0 : 0}`} direcao={direcao} />
+          {regua && <Regua3D r={regua} etiquetas={etiquetasRegua} />}
         </Canvas>
       </div>
       <p id={idDescricao} className="sr" data-testid="descricao-cena">{descricao}</p>
