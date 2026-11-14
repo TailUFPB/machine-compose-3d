@@ -1,7 +1,7 @@
 // Layout paramétrico da cena 3D: cada peça vira uma caixa dimensionada pela ficha técnica (mm).
 // Eixos: X = profundidade (frente -X, traseira +X), Y = altura, Z = largura (lado da placa-mãe em -Z).
 import { aioBlocoModelo, aioRadiadorModelo } from "./aio";
-import type { Cena, Tipo } from "./api";
+import type { Cena, Folga, Tipo } from "./api";
 import { coolerModelo, cpuModelo } from "./cpu";
 import { discoModelo } from "./disco";
 import { fonteModelo, gabineteModelo } from "./gabinete";
@@ -442,4 +442,28 @@ export function descricaoCena(cena: Cena, caixas: Caixa[], regioes: Regiao[]): s
   const pecas = cena.pecas.map((p) => `${p.nome} (${onde(p)})`).join("; ");
   const conflitos = cena.conflitos.map((c) => regioes.find((r) => r.conflitoId === c.id)?.texto ?? c.descricao).filter(Boolean);
   return `Montagem com ${cena.pecas.length} peças: ${pecas}. ` + (conflitos.length ? `${conflitos.length === 1 ? "1 conflito" : `${conflitos.length} conflitos`}: ${conflitos.join("; ")}.` : "Sem conflitos.");
+}
+
+// ---------------------------------------------------------------- vistas prontas e régua de folga
+
+export type Vista = "livre" | "frente" | "lateral" | "topo";
+/** Do alvo até a câmera: frente olha de −X (painel da frente), lateral de +Z (vidro), topo de +Y. */
+export const DIRECAO: Record<Exclude<Vista, "livre">, Vec3> = { frente: [-1, 0, 0], lateral: [0, 0, 1], topo: [0, 1, 0] };
+/** A vista em que cada medida aparece de lado: o comprimento da GPU de lado, alturas de frente, a fonte de cima. */
+export const VISTA_DA_FOLGA: Record<Folga["id"], Vista> = { gpu: "lateral", cooler: "frente", memoria: "frente", fonte: "topo" };
+
+/** Linha de cota de uma folga no mundo (mm): parte de `inicio` ao longo de `eixo` no `sentido`; a peça ocupa
+ *  `peca_mm` e o limite vai até `limite_mm`. Usa os números da ficha, não a geometria desenhada. */
+export interface Regua { folga: Folga["id"]; eixo: 0 | 1 | 2; inicio: Vec3; sentido: 1 | -1; peca_mm: number; limite_mm: number }
+const ACIMA = 12;   // mm acima da peça, para a régua não ficar dentro dela
+
+export function reguaDe(folga: Folga, caixas: Caixa[]): Regua | null {
+  const c = caixas.find((x) => x.id === folga.peca && x.chave === x.id);
+  if (!c) return null;
+  const gpu = folga.id === "gpu";
+  const eixo = gpu ? 0 : 2, sentido = gpu ? -1 : 1;
+  const inicio: Vec3 = [...c.pos];
+  inicio[eixo] = c.pos[eixo] - sentido * c.tam[eixo] / 2;   // GPU: traseira (+X); demais: face na placa-mãe (−Z)
+  inicio[1] = c.pos[1] + c.tam[1] / 2 + ACIMA;
+  return { folga: folga.id, eixo, inicio, sentido, peca_mm: folga.tamanho_mm, limite_mm: folga.limite_mm };
 }

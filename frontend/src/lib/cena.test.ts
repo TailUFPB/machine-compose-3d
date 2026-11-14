@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Cena } from "./api";
-import { type Cabo, type Caixa, type Vec3, descricaoCena, estadoPasso, focoDaPrevia, foraDoGabinete, montarCabos, montarCena, noMundo, posicaoExplodida, regioesDeConflito } from "./cena";
+import type { Cena, Folga } from "./api";
+import { type Cabo, type Caixa, type Vec3, VISTA_DA_FOLGA, descricaoCena, estadoPasso, focoDaPrevia, reguaDe, foraDoGabinete, montarCabos, montarCena, noMundo, posicaoExplodida, regioesDeConflito } from "./cena";
 
 type Peca = Cena["pecas"][number];
 const p = (id: string, tipo: Peca["tipo"], specs: Record<string, any>, nome = id): Peca => ({ id, tipo, nome, specs });
@@ -333,5 +333,34 @@ describe("focoDaPrevia", () => {
 
   it("candidata fora da cena devolve null", () => {
     expect(focoDaPrevia(caixas, regioes, c.conflitos, "nao-existe")).toBeNull();
+  });
+});
+
+describe("reguaDe", () => {
+  const caixas = montarCena(builds["ATX, cooler a ar, M.2 e discos de 2,5 e 3,5"]);
+  const folga = (id: Folga["id"], peca: string, tamanho: number, limite: number): Folga =>
+    ({ id, peca, limite_de: "case", tamanho_mm: tamanho, limite_mm: limite, sobra_mm: limite - tamanho, estado: "cabe", dica: null });
+
+  it("GPU: eixo X a partir da traseira, em direção à frente", () => {
+    const g = de(caixas, "gpu"), r = reguaDe(folga("gpu", "gpu", 290, 392), caixas)!;
+    expect(r).toMatchObject({ folga: "gpu", eixo: 0, sentido: -1, peca_mm: 290, limite_mm: 392 });
+    expect(r.inicio[0]).toBeCloseTo(g.pos[0] + g.tam[0] / 2, 5);
+    expect(r.inicio[1]).toBeCloseTo(g.pos[1] + g.tam[1] / 2 + 12, 5);   // acima da peça
+  });
+
+  it("memória e cooler: eixo Z a partir da face na placa-mãe", () => {
+    for (const [id, chave] of [["memoria", "ram"], ["cooler", "cooler"]] as const) {
+      const c = de(caixas, chave), r = reguaDe(folga(id, chave, 34, 40), caixas)!;
+      expect(r).toMatchObject({ eixo: 2, sentido: 1 });
+      expect(r.inicio[2]).toBeCloseTo(c.pos[2] - c.tam[2] / 2, 5);
+    }
+  });
+
+  it("peça fora da cena devolve null", () => {
+    expect(reguaDe(folga("gpu", "outra-gpu", 290, 392), caixas)).toBeNull();
+  });
+
+  it("cada folga tem a sua vista", () => {
+    expect(VISTA_DA_FOLGA).toEqual({ gpu: "lateral", cooler: "frente", memoria: "frente", fonte: "topo" });
   });
 });

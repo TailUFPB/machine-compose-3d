@@ -50,6 +50,13 @@ export interface Cena {
   pecas: { id: string; tipo: Tipo; nome: string; specs: Record<string, any>; origem?: Record<string, string> }[];
   conflitos: { id: string; itens: string[]; descricao: string; severidade: Severidade }[];
   passos: { tipo: Tipo; texto: string }[];
+  folgas?: Folga[];
+}
+
+/** Folga medida pela ficha (`backend/app/folgas.py`): `sobra_mm` negativo = passa do limite. */
+export interface Folga {
+  id: "gpu" | "cooler" | "memoria" | "fonte"; peca: string; limite_de: string; tamanho_mm: number; limite_mm: number;
+  sobra_mm: number; estado: "cabe" | "justa" | "ajuste" | "nao_cabe"; dica: string | null;
 }
 
 /** Cena de uma troca ainda não aplicada (`POST /builds/{id}/cena/previa`). `diferenca_preco`: null sem preço com fonte. */
