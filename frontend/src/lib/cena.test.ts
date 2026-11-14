@@ -361,6 +361,6 @@ describe("reguaDe", () => {
   });
 
   it("cada folga tem a sua vista", () => {
-    expect(VISTA_DA_FOLGA).toEqual({ gpu: "lateral", cooler: "frente", memoria: "frente", fonte: "topo" });
+    expect(VISTA_DA_FOLGA).toEqual({ gpu: "lateral", cooler: "topo", memoria: "topo", fonte: "topo" });
   });
 });

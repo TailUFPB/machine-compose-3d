@@ -132,28 +132,30 @@ function Foco({ alvo, distancia, vez = 0, direcao }: { alvo: Vec3; distancia: nu
   return null;
 }
 
-const COR_REGUA = { peca: "#dfe8ef", sobra: "#a4d007", passa: "#ff6b5e" };   // --text, --positive, --negative
+const COR_REGUA = { peca: "#dfe8ef", sobra: "#a4d007", justa: "#e8b84a", passa: "#ff6b5e" };   // --text, --positive, --warning, --negative
 const TRACO = 8;   // mm das marcas nas pontas
 
 /** Régua de folga: o trecho da peça, o que sobra (ou passa) até o limite, marcas nas pontas e rótulos em mm. */
-function Regua3D({ r, etiquetas }: { r: Regua; etiquetas: MutableRefObject<Record<string, HTMLElement | null>> }) {
+function Regua3D({ r, estado, etiquetas }: { r: Regua; estado: Folga["estado"]; etiquetas: MutableRefObject<Record<string, HTMLElement | null>> }) {
   const ponto = (mmAoLongo: number, desvio = 0): Vec3 => {
     const p: Vec3 = [...r.inicio];
     p[r.eixo] += r.sentido * mmAoLongo;
     p[1] += desvio;
     return mm(p);
   };
-  const ate = Math.min(r.peca_mm, r.limite_mm), resto = r.peca_mm <= r.limite_mm ? COR_REGUA.sobra : COR_REGUA.passa;
+  const ate = Math.min(r.peca_mm, r.limite_mm);
+  const resto = estado === "cabe" ? COR_REGUA.sobra : estado === "nao_cabe" ? COR_REGUA.passa : COR_REGUA.justa;
   const marcas = [0, r.peca_mm, r.limite_mm].map((d) => [ponto(d, -TRACO), ponto(d, TRACO)] as [Vec3, Vec3]);
-  const rotulos: [string, number][] = [["peca", r.peca_mm / 2], ["resto", (r.peca_mm + r.limite_mm) / 2], ["limite", r.limite_mm]];
+  // rótulos em alturas diferentes: com sobra pequena os três caem quase no mesmo ponto
+  const rotulos: [string, number, string][] = [["peca", r.peca_mm / 2, "-130%"], ["resto", (r.peca_mm + r.limite_mm) / 2, "40%"], ["limite", r.limite_mm, "-260%"]];
   const v = useMemo(() => new Vector3(), []);
   useFrame(({ camera, size }) => {
-    for (const [k, d] of rotulos) {
+    for (const [k, d, dy] of rotulos) {
       const el = etiquetas.current[k];
       if (!el) continue;
-      v.set(...ponto(d, k === "limite" ? TRACO * 3 : 0)).project(camera);
+      v.set(...ponto(d)).project(camera);
       el.style.visibility = v.z < 1 ? "visible" : "hidden";
-      el.style.transform = `translate(${((v.x + 1) / 2) * size.width}px, ${((1 - v.y) / 2) * size.height}px) translate(-50%, -130%)`;
+      el.style.transform = `translate(${((v.x + 1) / 2) * size.width}px, ${((1 - v.y) / 2) * size.height}px) translate(-50%, ${dy})`;
     }
   });
   return (
@@ -375,7 +377,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         data-vista={vista} data-regua={regua ? folga!.id : ""}>
         {regua && folga && ([
           ["peca", `${ROTULO[cena.pecas.find((p) => p.id === folga.peca)?.tipo ?? "gpu"] ?? "peça"} ${folga.tamanho_mm} mm`, "medida regua"],
-          ["resto", folga.sobra_mm < 0 ? `passa ${-folga.sobra_mm} mm` : `sobram ${folga.sobra_mm} mm`, `medida regua ${folga.sobra_mm < 0 ? "neg" : "pos"}`],
+          ["resto", folga.sobra_mm < 0 ? `passa ${-folga.sobra_mm} mm` : `sobram ${folga.sobra_mm} mm`, `medida regua ${folga.estado}`],
           ["limite", `cabe ${folga.limite_mm} mm`, "medida regua"],
         ] as const).map(([k, texto, classe]) => (
           <span key={k} ref={(el) => { etiquetasRegua.current[k] = el; }} className={classe} data-testid="regua-medida">{texto}</span>
@@ -407,7 +409,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           {mostraRegioes && regioes.map((r) => <Regiao3D key={r.conflitoId} r={r} cor={negativa} etiqueta={() => etiquetas.current[r.conflitoId] ?? null} />)}
           <OrbitControls makeDefault onStart={() => { setPedido(null); setVista("livre"); }} />
           <Foco alvo={foco} distancia={distancia} vez={`${focado?.vez ?? 0}:${direcao ? pedido?.vez ?? 0 : 0}`} direcao={direcao} />
-          {regua && <Regua3D r={regua} etiquetas={etiquetasRegua} />}
+          {regua && folga && <Regua3D r={regua} estado={folga.estado} etiquetas={etiquetasRegua} />}
         </Canvas>
       </div>
       <p id={idDescricao} className="sr" data-testid="descricao-cena">{descricao}</p>

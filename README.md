@@ -82,3 +82,9 @@ clicar abre o detalhe com a ficha, a faixa e as ofertas de preço (as mesmas da 
 "Prévia: não aplicada", os conflitos e a diferença de preço. `POST /builds/{id}/cena/previa` monta essa cena sem gravar
 nada (sem LLM e sem rastro no Langfuse); só **Aplicar troca** (`POST /builds/{id}/trocar`) altera a build. Esc ou
 Cancelar descartam a prévia. Design em [docs/superpowers/specs/2026-11-13-cena-paineis-design.md](docs/superpowers/specs/2026-11-13-cena-paineis-design.md).
+
+A barra da cena tem **Vista: Livre, Frente, Lateral, Topo**; arrastar com o mouse volta a Livre. No painel, **Folgas**
+mostra quanto sobra (ou passa) da GPU no gabinete, do cooler na tampa, da memória sob o cooler e da fonte na largura do
+gabinete, com os estados cabe, justa, ajuste e não cabe e os mesmos limites da revisão (`backend/app/folgas.py`).
+Clicar numa folga leva a câmera à vista da medida e desenha a régua; Esc tira a régua. Na prévia de troca, as folgas que
+mudam aparecem na diferença. Design em [docs/superpowers/specs/2026-11-14-vistas-folgas-design.md](docs/superpowers/specs/2026-11-14-vistas-folgas-design.md).

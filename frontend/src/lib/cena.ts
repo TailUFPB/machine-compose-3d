@@ -449,8 +449,9 @@ export function descricaoCena(cena: Cena, caixas: Caixa[], regioes: Regiao[]): s
 export type Vista = "livre" | "frente" | "lateral" | "topo";
 /** Do alvo até a câmera: frente olha de −X (painel da frente), lateral de +Z (vidro), topo de +Y. */
 export const DIRECAO: Record<Exclude<Vista, "livre">, Vec3> = { frente: [-1, 0, 0], lateral: [0, 0, 1], topo: [0, 1, 0] };
-/** A vista em que cada medida aparece de lado: o comprimento da GPU de lado, alturas de frente, a fonte de cima. */
-export const VISTA_DA_FOLGA: Record<Folga["id"], Vista> = { gpu: "lateral", cooler: "frente", memoria: "frente", fonte: "topo" };
+/** A vista em que cada medida aparece de lado: o comprimento da GPU pelo vidro; alturas a partir da placa-mãe e a
+ *  largura da fonte de cima (o painel da frente é opaco, o topo tem as grades das ventoinhas). */
+export const VISTA_DA_FOLGA: Record<Folga["id"], Vista> = { gpu: "lateral", cooler: "topo", memoria: "topo", fonte: "topo" };
 
 /** Linha de cota de uma folga no mundo (mm): parte de `inicio` ao longo de `eixo` no `sentido`; a peça ocupa
  *  `peca_mm` e o limite vai até `limite_mm`. Usa os números da ficha, não a geometria desenhada. */

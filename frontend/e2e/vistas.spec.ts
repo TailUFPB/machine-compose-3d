@@ -43,3 +43,59 @@ test.describe("vistas prontas", () => {
     }
   });
 });
+
+test.describe("folgas no painel", () => {
+  const GPU = "rtx-5060-8g";   // GPU da build fixa do seed
+  const folga = (page: Page, id: string) => page.getByTestId(`folga-${id}`);
+
+  test("clicar numa folga leva à vista e desenha a régua", async ({ page, request }) => {
+    const erros = await abrirCena(page, await criarBuild(request));
+    await expect(folga(page, "gpu")).toContainText("sobram");
+    await expect(folga(page, "gpu")).toContainText("mm");
+    await folga(page, "gpu").click();
+    await expect(cena(page)).toHaveAttribute("data-regua", "gpu");
+    await expect(cena(page)).toHaveAttribute("data-vista", "lateral");
+    await expect(page.getByTestId("regua-medida").first()).toBeVisible();
+    await expect(page.getByTestId("descricao-cena")).toContainText("Régua:");
+    await folga(page, "gpu").click();
+    await expect(cena(page)).toHaveAttribute("data-regua", "");
+    expect(erros).toEqual([]);
+  });
+
+  test("Esc tira só a régua e volta à vista de antes", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await page.getByTestId("vista-topo").click();
+    await folga(page, "gpu").click();
+    await expect(cena(page)).toHaveAttribute("data-vista", "lateral");
+    await page.keyboard.press("Escape");
+    await expect(cena(page)).toHaveAttribute("data-regua", "");
+    await expect(cena(page)).toHaveAttribute("data-vista", "topo");
+  });
+
+  test("folga que não cabe aparece com o excesso", async ({ page, request }) => {
+    const id = await criarBuild(request, ["case-nr200p"]);
+    await request.post(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/builds/${id}/trocar`, { data: { de: GPU, para: "rtx-4080s" } });
+    await abrirCena(page, id);
+    await expect(folga(page, "gpu")).toContainText("passa 10 mm");
+    await expect(folga(page, "gpu")).toHaveClass(/nao_cabe/);
+  });
+
+  test("régua some ao abrir uma peça", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await folga(page, "gpu").click();
+    await expect(cena(page)).toHaveAttribute("data-regua", "gpu");
+    await page.getByTestId(`linha-${GPU}`).click();
+    await expect(cena(page)).toHaveAttribute("data-regua", "");
+    await page.getByRole("button", { name: "Voltar à lista" }).click();
+    await expect(folga(page, "gpu")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("prévia mostra a folga que muda", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request, ["case-nr200p"]));
+    await page.getByTestId(`linha-${GPU}`).click();
+    await page.getByTestId("trocar").click();
+    await page.getByTestId("ver-incompativeis").check();
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("diferenca-previa")).toContainText("GPU: sobram 90 mm → passa 10 mm");
+  });
+});

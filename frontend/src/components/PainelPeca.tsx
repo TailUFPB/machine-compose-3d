@@ -3,9 +3,9 @@
 // detalhe (ficha, preço com fonte, motivo da escolha) e as ações Trocar e Remover.
 // Design: docs/superpowers/specs/2026-11-13-cena-paineis-design.md
 import { useEffect, useState } from "react";
-import { api, type Build, type Cena, type CenaPrevia, type Componente, type ResultadoPreco } from "@/lib/api";
+import { api, type Build, type Cena, type CenaPrevia, type Componente, type Folga, type ResultadoPreco } from "@/lib/api";
 import { brl, TIPOS } from "@/lib/formato";
-import { bloqueioTroca, diferencaConflitos, linhasPainel, resumoFicha } from "@/lib/painel";
+import { bloqueioTroca, diferencaConflitos, folgasQueMudam, linhasPainel, resumoFicha, textoFolga } from "@/lib/painel";
 import { ErroBloco, OfertasPeca, useAcao } from "./Paineis";
 
 export interface PainelProps {
@@ -24,7 +24,12 @@ export interface PainelProps {
   onPrevia: (de: string, para: string) => void;
   onCancelarPrevia: () => void;
   onAplicarTroca: () => Promise<void>;
+  /** Folga com régua ativa na cena; clicar de novo desliga. */
+  folgaAtiva: Folga["id"] | null;
+  onFolga: (id: Folga["id"] | null) => void;
 }
+
+const NOME_FOLGA: Record<Folga["id"], string> = { gpu: "GPU", cooler: "Cooler", memoria: "Memória", fonte: "Fonte" };
 
 /** id da peça da build a partir da `chave` da caixa aberta na cena. */
 export const idDaChave = (chave: string | null) => chave?.replace(/:radiador$/, "") ?? null;
@@ -51,6 +56,24 @@ export default function PainelPeca(props: PainelProps) {
               </li>
             ))}
           </ul>
+          {(cena?.folgas?.length ?? 0) > 0 && (
+            <>
+              <h3>Folgas</h3>
+              <ul className="lista folgas">
+                {cena!.folgas!.map((f) => (
+                  <li key={f.id} data-testid={`folga-${f.id}`} className={`folga ${f.estado} ${props.folgaAtiva === f.id ? "ativo" : ""}`}
+                    tabIndex={0} role="button" aria-pressed={props.folgaAtiva === f.id}
+                    aria-label={`${NOME_FOLGA[f.id]}: ${textoFolga(f)}, mostrar régua`}
+                    onClick={() => props.onFolga(props.folgaAtiva === f.id ? null : f.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); props.onFolga(props.folgaAtiva === f.id ? null : f.id); } }}>
+                    <span className="linha1">{NOME_FOLGA[f.id]} {f.tamanho_mm} mm · cabe {f.limite_mm}</span>
+                    <span className="dir num">{textoFolga(f)}</span>
+                    {f.dica && <span className="linha2">{f.dica}</span>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </>
       )}
     </section>
@@ -140,6 +163,9 @@ function Trocar({ build, cena, previa, pedindo, erroPrevia, onPrevia, onCancelar
           <p>Preço: {previa.cena.diferenca_preco == null ? "sem preço com fonte" : sinal(previa.cena.diferenca_preco)}</p>
           {dif && dif.novos.length > 0 && <p className="neg">Novos conflitos: {dif.novos.map((c) => c.descricao).join("; ")}</p>}
           {dif && dif.resolvidos.length > 0 && <p className="pos">Resolve: {dif.resolvidos.map((c) => c.descricao).join("; ")}</p>}
+          {folgasQueMudam(cena?.folgas, previa.cena.folgas).map(({ id, antes, depois }) => (
+            <p key={id}>{NOME_FOLGA[id]}: {antes ? textoFolga(antes) : "—"} → <span className={depois && depois.sobra_mm < 0 ? "neg" : ""}>{depois ? textoFolga(depois) : "—"}</span></p>
+          ))}
           <div className="acoes">
             <button className="btn primario" disabled={aplicando || !!pedindo}   // outra candidata carregando: aplicaria a anterior
               onClick={async () => { setAplicando(true); try { await onAplicarTroca(); } finally { setAplicando(false); } }}>Aplicar troca</button>
