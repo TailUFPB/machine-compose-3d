@@ -157,6 +157,7 @@ interface Props {
   posicao: (t: number) => Vec3 | null;   // posição montada (tutorial incluso), em mm
   saida: number;                         // quanto a placa sai do gabinete em +Z quando aberta, em mm
   onClick: () => void; onHover: (n: string | null) => void;
+  onToque?: (nome: string) => void;   // toque (dedo): a cena decide se mostra o nome ou abre
   destacada?: boolean;   // hover sincronizado com o painel ou candidata da prévia
   corDestaque?: string;
   moveis?: (t: number) => string[] | undefined;   // prefixos de id das subpeças a que `encaixe` se aplica; ausente = todas
@@ -164,7 +165,7 @@ interface Props {
   leve?: boolean;   // qualidade Leve: fechada, sem pinos/contatos/trilhas e sem contorno (o gabinete mantém o contorno)
 }
 
-export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0, moveis, destacada = false, corDestaque = "#66c0f4", leve = false }: Props) {
+export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0, moveis, destacada = false, corDestaque = "#66c0f4", leve = false, onToque }: Props) {
   const destaque = useMemo(() => new Color(corDestaque), [corDestaque]);
   const maxOrdem = Math.max(...modelo.partes.map((p) => p.ordem));
   const enxuta = leve && !aberto;   // só muda a malha quando entra ou sai do Leve fechado (em Alta, abrir não refaz nada)
@@ -213,12 +214,17 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
     for (const m of Object.values(mats)) { m.emissive.copy(pulso > 0 ? PULSO : destaque); m.emissiveIntensity = brilho; }
   });
 
-  const passar = (e: Parameters<typeof nomeEm>[0] & { stopPropagation: () => void }) => { e.stopPropagation(); onHover(aberto ? `${c.nome} · ${nomeEm(e)}` : c.nome); };
+  type Ev = Parameters<typeof nomeEm>[0] & { stopPropagation: () => void; pointerType?: string };
+  const nome = (e: Ev) => (aberto ? `${c.nome} · ${nomeEm(e)}` : c.nome);
+  // no toque, over/out chegam juntos com o dedo e apagariam o nome: o nome vem do estado do toque (onToque)
+  const passar = (e: Ev) => { if (e.pointerType === "touch") return; e.stopPropagation(); onHover(nome(e)); };
+  const deDedo = useRef(false);
   return (
     <group ref={raiz} scale={escala} rotation={c.rot}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onPointerDown={(e) => { deDedo.current = e.pointerType === "touch"; }}
+      onClick={(e) => { e.stopPropagation(); if (deDedo.current && onToque) onToque(nome(e)); else onClick(); }}
       onPointerOver={passar} onPointerMove={aberto ? passar : undefined}   // numa malha fundida o rótulo muda sem trocar de objeto
-      onPointerOut={() => onHover(null)}>
+      onPointerOut={(e) => { if (e.pointerType !== "touch") onHover(null); }}>
       {grupos.map((l, i) => (
         <group key={l.subs[0].id} ref={(o) => { partes.current[i] = o; }} position={l.pos}>
           <Parte l={l} mat={mat} spin={spin} contorno={contorno} />
