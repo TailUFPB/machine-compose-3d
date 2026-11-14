@@ -1,5 +1,6 @@
 // Fonte e gabinete procedurais. Referencial local dos dois: x = profundidade (traseira em +x), y = altura, z = largura.
 // A ficha da fonte segue a norma ATX: `c` (150) é a largura, que fica em z; `l` (140) é a profundidade, em x.
+import type { Ventoinha } from "./api";
 import type { Vec3 } from "./cena";
 import { type Fonte, type Modelo, type Sub, montador } from "./peca";
 
@@ -52,8 +53,10 @@ export function fonteModelo(specs: Record<string, any>): Modelo {
  * Gabinete torre: pés, cinco chapas, lateral, filtros, fans, gaiola de discos e cobertura da fonte.
  * Ficha opcional: `posicoes_fan` {frente, topo, traseira}, `lateral` ("vidro" | "chapa") e `baias` {"2.5", "3.5"}.
  * `ocultar`: ids (ou prefixos de id, até o hífen) de subpeças que a build dispensa: fans no lugar do radiador, tampas de slot da GPU.
+ * `fans`: ventoinhas do fluxo de ar (backend/app/fluxo.py); com a lista, desenha as do gabinete e do pacote nas vagas
+ * pedidas (as do radiador vêm com o radiador) em vez de preencher `fans_inclusos`.
  */
-export function gabineteModelo(specs: Record<string, any>, passagens: { x: number; z: number }[] = [], ocultar: string[] = []): Modelo {
+export function gabineteModelo(specs: Record<string, any>, passagens: { x: number; z: number }[] = [], ocultar: string[] = [], fans?: Ventoinha[]): Modelo {
   const d = specs.dimensoes ?? { c: 450, a: 460, l: 230 };
   const [C, A, L]: Vec3 = [d.c, d.a, d.l];
   const partes: Sub[] = [], add = montador(partes);
@@ -118,9 +121,11 @@ export function gabineteModelo(specs: Record<string, any>, passagens: { x: numbe
   for (let i = 0; i < nFrente; i++)
     vagas.push({ ancora: `fan_frontal_${i}`, id: `fan-frontal-${i}`, nome: `Fan frontal ${i + 1}`, p: [xFrente + FAN / 2, yMeio + (i - (nFrente - 1) / 2) * 125, 0], sai: [-55, 0, 0] });
   xTopo.forEach((x, i) => vagas.push({ ancora: `fan_topo_${i}`, id: `fan-topo-${i}`, nome: `Fan do topo ${i + 1}`, p: [x, A / 2 - t - FAN / 2, 0], sai: [0, 55, 0] }));
+  const pedidas = fans && new Set(fans.filter((f) => f.origem !== "radiador")
+    .map((f) => (f.vaga === "traseira" ? "fan_traseiro" : `fan_${f.vaga === "frente" ? "frontal" : "topo"}_${f.indice}`)));
   vagas.forEach((v, i) => {
     ancoras[v.ancora] = v.p;
-    if (i >= (specs.fans_inclusos ?? 0)) return;
+    if (pedidas ? !pedidas.has(v.ancora) : i >= (specs.fans_inclusos ?? 0)) return;
     const emY = v.sai[1] !== 0;
     add(v.id, v.nome, "hi", v.p, emY ? [2 * r, FAN, 2 * r] : [FAN, 2 * r, 2 * r], v.sai, 3, "ficha", { tipo: "fan", raio: r, pas: 9, eixo: emY ? "y" : "x" });
   });

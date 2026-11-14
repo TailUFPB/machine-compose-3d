@@ -1,6 +1,6 @@
 // Funções puras do painel ao lado da cena 3D: linhas da build, resumo da ficha, bloqueio de troca, diferença de
 // conflitos da prévia e a regra "a última prévia pedida vence".
-import type { Build, BuildItem, Cena, Componente, Folga, Tipo } from "./api";
+import type { Build, BuildItem, Cena, Componente, Fluxo, Folga, Tipo } from "./api";
 
 export interface LinhaPainel {
   id: string; tipo: Tipo; nome: string; preco: number | null; conflito: boolean; travada: boolean; jaTenho: boolean; quantidade: number;
@@ -75,4 +75,24 @@ export function folgasQueMudam(atual: Folga[] | undefined, previa: Folga[] | und
     const antes = a.get(id) ?? null, depois = d.get(id) ?? null;
     return antes && depois && antes.sobra_mm === depois.sobra_mm && antes.estado === depois.estado ? [] : [{ id, antes, depois }];
   });
+}
+
+/** Linhas da seção "Fluxo de ar" do painel. `nao_cabe` quando há menos ventoinhas que as recomendadas. */
+export function linhasFluxo(f: Fluxo): { balanco: string; calor: string; estado: "cabe" | "nao_cabe" } {
+  const n = f.ventoinhas.length;
+  return {
+    balanco: `Entrada ${f.entrada} · Saída ${f.saida} · pressão ${f.pressao}`,
+    calor: `Calor ${f.calor_w} W: ${f.recomendadas} ventoinhas recomendadas, há ${n}`,
+    estado: n >= f.recomendadas ? "cabe" : "nao_cabe",
+  };
+}
+
+/** O que muda no fluxo de ar com a troca da prévia. */
+export function fluxoQueMuda(a: Fluxo | null | undefined, b: Fluxo | null | undefined): string[] {
+  if (!a || !b) return [];
+  const out: string[] = [];
+  if (a.ventoinhas.length !== b.ventoinhas.length) out.push(`Ventoinhas: ${a.ventoinhas.length} → ${b.ventoinhas.length}`);
+  if (a.recomendadas !== b.recomendadas) out.push(`Ventoinhas recomendadas: ${a.recomendadas} → ${b.recomendadas}`);
+  if (a.pressao !== b.pressao) out.push(`Pressão: ${a.pressao} → ${b.pressao}`);
+  return out;
 }
