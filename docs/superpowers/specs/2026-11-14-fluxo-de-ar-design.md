@@ -103,8 +103,9 @@ passagem de cabos, citada no mesmo item, já entrou na #8.
   físico em região vermelha e em conflito no painel. Aparecem na revisão e na seção "Fluxo de ar", nunca pintando
   peça. Isso mantém os testes de conflito como estão.
 - **Radiador e vagas:**
-  - o radiador ocupa só as vagas da face dele, tantas quanto as ventoinhas dele (`fans` do cooler), a partir da
-    primeira;
+  - o radiador fica com a face dele inteira, porque a cena o desenha centralizado nela. Só as ventoinhas dele contam
+    nessa face (`fans` do cooler). Isso foi mudado na revisão final: com "só as vagas que as ventoinhas dele ocupam",
+    uma ventoinha do pacote era desenhada dentro do radiador;
   - as ventoinhas inclusas do gabinete que perderam a vaga vão para as vagas livres, na ordem de sempre (traseira,
     frente, topo), porque quem monta move a ventoinha e não a joga fora;
   - o pacote ocupa o que sobrar.
