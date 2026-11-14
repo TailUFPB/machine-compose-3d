@@ -1918,7 +1918,8 @@
    "marca": "Diversos",
    "modelo": "Kit 3 ventoinhas 120mm",
    "specs": {
-    "categoria": "ventoinhas"
+    "categoria": "ventoinhas",
+    "fans": 3
    },
    "fonte": "seed:demo/ficha-tecnica"
   },
