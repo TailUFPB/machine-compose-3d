@@ -94,3 +94,10 @@ trilhas e contornos das peças fechadas (a peça aberta mostra tudo). Auto come�
 se a cena ficar abaixo de 30 q/s; a escolha manual fica guardada no navegador. No toque, o primeiro toque numa peça mostra
 o nome e acende a linha no painel, o segundo abre; 1 dedo rola a página e 2 dedos giram e aproximam a cena. Design em
 [docs/superpowers/specs/2026-11-14-celular-design.md](docs/superpowers/specs/2026-11-14-celular-design.md).
+
+**Fluxo de ar** (`backend/app/fluxo.py`): cada ventoinha do gabinete, do pacote de ventoinhas e do radiador ocupa uma
+vaga com sentido (frente puxa ar para dentro; traseira e topo jogam para fora). O botão **Fluxo de ar** na barra da
+cena mostra setas em cada ventoinha e o ar passando pela GPU e pelo cooler; a seção **Fluxo de ar** do painel traz o
+balanço (pressão positiva, equilibrada ou negativa) e o calor estimado (TDP da CPU e da GPU, uma ventoinha a cada
+150 W). O revisor de fluxo de ar avisa sem entrada, pressão negativa, poucas ventoinhas e radiador na frente com GPU
+quente. Design em [docs/superpowers/specs/2026-11-14-fluxo-de-ar-design.md](docs/superpowers/specs/2026-11-14-fluxo-de-ar-design.md).

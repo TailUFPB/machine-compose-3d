@@ -80,3 +80,29 @@ test.describe("fluxo de ar na cena", () => {
     expect(qps, relato).toBeGreaterThanOrEqual(/swiftshader|llvmpipe|software/i.test(renderizador) ? 10 : 30);
   });
 });
+
+test.describe("fluxo de ar no painel", () => {
+  test("painel mostra o balanço e o calor", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    const s = page.getByTestId("fluxo-painel");
+    await expect(s).toContainText("Entrada");
+    await expect(s).toContainText("Saída");
+    await expect(s).toContainText("pressão");
+    await expect(s).toContainText(/\d+ W/);
+  });
+
+  test("clicar no painel liga o fluxo na cena", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await page.getByTestId("fluxo-painel").click();
+    await expect(cena(page)).toHaveAttribute("data-fluxo", "on");
+  });
+
+  test("prévia mostra o fluxo que muda", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request, ["case-q300l"]));
+    await page.getByTestId("linha-rtx-5060-8g").click();
+    await page.getByTestId("trocar").click();
+    await page.getByTestId("ver-incompativeis").check();
+    await page.getByTestId("candidata-rtx-4080s").click();
+    await expect(page.getByTestId("diferenca-previa")).toContainText("Ventoinhas recomendadas");
+  });
+});
