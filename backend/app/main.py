@@ -8,9 +8,10 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import agente, exportar, ficha, importar, precos, resultado
+from . import agente, exportar, ficha, folgas, importar, precos, resultado
 from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
+from .compat import revisores
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
 from .fps import estimar_build
@@ -323,4 +324,5 @@ def _dados_cena(store: Store, itens: list[BuildItem], achados: list) -> dict:
                        "origem": {campo: o["url"] for campo, o in c.specs_origem.items() if o.get("url")}}   # ausente = seed/estimado
                       for c in comps if c.tipo != "extra"],
             "conflitos": conflitos,
-            "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos]}
+            "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos],
+            "folgas": [f.model_dump() for f in folgas.calcular(revisores._pecas(store, itens))]}
