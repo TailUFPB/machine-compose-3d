@@ -334,7 +334,7 @@ const encaixam = (a: Caixa, b: Caixa) => a.id === b.id || ENCAIXE.has(`${a.tipo}
  * da peça que passa da parede do gabinete (excesso = quanto passa) ou a interseção de duas peças do conflito
  * (excesso = menor dimensão da interseção). Com mais de uma no mesmo conflito, fica a de maior excesso.
  */
-export function regioesDeConflito(caixas: Caixa[], conflitos: Cena["conflitos"]): Regiao[] {
+export function regioesDeConflito(caixas: Caixa[], conflitos: Cena["conflitos"], folgas: Folga[] = []): Regiao[] {
   const gab = caixas.find((c) => c.tipo === "gabinete");
   return conflitos.flatMap((conf) => {
     const pecas = caixas.filter((c) => c !== gab && conf.itens.includes(c.id));
@@ -368,8 +368,12 @@ export function regioesDeConflito(caixas: Caixa[], conflitos: Cena["conflitos"])
     }
     const r = achadas.sort((a, b) => b.mm - a.mm)[0];
     if (!r) return [];
-    const excessoMm = Math.round(r.mm);
-    return [{ conflitoId: conf.id, centro: r.centro, tam: r.tam, excessoMm, texto: `${conf.descricao} (passa ${excessoMm} mm)`.trim() }];
+    // Com folga medida para as duas peças do conflito, o número é o da ficha (o mesmo da régua e da revisão); a
+    // geometria só posiciona a região. Se a ficha diz que cabe, a região não diz que passa.
+    const f = folgas.find((x) => conf.itens.includes(x.peca) && conf.itens.includes(x.limite_de));
+    const excessoMm = f ? (f.sobra_mm < 0 ? -f.sobra_mm : null) : Math.round(r.mm);
+    return [{ conflitoId: conf.id, centro: r.centro, tam: r.tam, excessoMm,
+              texto: excessoMm == null ? conf.descricao : `${conf.descricao} (passa ${excessoMm} mm)`.trim() }];
   });
 }
 

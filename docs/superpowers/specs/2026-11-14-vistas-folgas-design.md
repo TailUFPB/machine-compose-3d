@@ -49,8 +49,11 @@ Itens da issue #2 cobertos: "Mostrar folgas ('placa de vídeo 285 mm, cabe 340 m
     < 5 mm, chamada minha);
   - **cabe** nos demais casos.
 - A folga é medida da ficha: um achado ignorado na revisão não muda o número nem o estado.
-- Clicar numa linha: a câmera vai para a vista da medida (GPU → Lateral, cooler → Frente, memória → Frente,
-  fonte → Topo), a régua aparece; clicar de novo ou Esc tira a régua e volta à vista anterior.
+- Clicar numa linha: a câmera vai para a vista da medida (GPU → Lateral; cooler, memória e fonte → Topo, porque o
+  painel da frente é opaco e esconde o cooler), a régua aparece; clicar de novo ou Esc tira a régua e volta à vista
+  anterior.
+- Quando um conflito tem folga medida para as duas peças, a região vermelha da cena usa o excesso da ficha (o mesmo
+  número da régua); se a ficha diz que cabe, a região não diz "passa".
 - Na prévia de troca (frente 1), que só existe com peça aberta (a seção Folgas está escondida), o bloco de diferença
   da prévia ganha as folgas que mudam com a troca: "GPU: sobram 152 → passa 10 mm". A régua não aparece na prévia.
 

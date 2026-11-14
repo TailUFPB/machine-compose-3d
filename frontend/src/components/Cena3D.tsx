@@ -116,6 +116,8 @@ function Foco({ alvo, distancia, vez = 0, direcao }: { alvo: Vec3; distancia: nu
   }, [controls]);
   useFrame(({ camera, clock }, dt) => {
     if (!controls) return;
+    const pos = camera.position.toArray().map((v) => v.toFixed(2)).join();   // onde a câmera está (teste de navegador)
+    if (tela.dataset.camera !== pos) tela.dataset.camera = pos;
     if (desde.current.chave !== chave) desde.current = { chave, t: clock.elapsedTime, fim: false };
     if (desde.current.fim) return;
     const acabou = clock.elapsedTime - desde.current.t > 1.2;
@@ -127,7 +129,6 @@ function Foco({ alvo, distancia, vez = 0, direcao }: { alvo: Vec3; distancia: nu
     controls.update();
     if (acabou) desde.current.fim = true;
     tela.dataset.alvo = controls.target.toArray().map((v) => v.toFixed(2)).join();   // onde a câmera olha (teste de navegador)
-    tela.dataset.camera = camera.position.toArray().map((v) => v.toFixed(2)).join();
   });
   return null;
 }
@@ -204,7 +205,7 @@ interface Props {
 export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = null, onDestaque, previa = null, escNoPainel = false, folga = null }: Props) {
   const caixas = useMemo(() => montarCena(cena), [cena]);
   const cabos = useMemo(() => montarCabos(caixas), [caixas]);
-  const regioes = useMemo(() => regioesDeConflito(caixas, cena.conflitos), [caixas, cena]);
+  const regioes = useMemo(() => regioesDeConflito(caixas, cena.conflitos, cena.folgas), [caixas, cena]);
   const idDescricao = useId();
   const [tutorial, setTutorial] = useState(false);
   const [passo, setPasso] = useState(0);
@@ -217,7 +218,8 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
   // Vista pronta: `pedido` anima a câmera uma vez (vez); arrastar com o mouse volta a "livre" sem animar
   const [vista, setVista] = useState<Vista>("livre");
   const [pedido, setPedido] = useState<{ vista: Vista; vez: number } | null>(null);
-  const pedirVista = (v: Vista) => { setVista(v); setPedido((p) => ({ vista: v, vez: (p?.vez ?? 0) + 1 })); };
+  // a vista escolhida vence o foco de um conflito clicado antes (senão o botão marcaria e a câmera não andaria)
+  const pedirVista = (v: Vista) => { setVista(v); setFocado(null); setPedido((p) => ({ vista: v, vez: (p?.vez ?? 0) + 1 })); };
   const antesDaRegua = useRef<Vista | null>(null);
   const etiquetasRegua = useRef<Record<string, HTMLElement | null>>({});
   useEffect(() => {   // régua ligada: vai para a vista da medida; desligada: volta à vista de antes
@@ -407,7 +409,8 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           ))}
           {cabos.map((c) => <Cabo3D key={c.id} c={c} visivel={caboVisivel(c)} reduzido={reduzido} onHover={setHover} />)}
           {mostraRegioes && regioes.map((r) => <Regiao3D key={r.conflitoId} r={r} cor={negativa} etiqueta={() => etiquetas.current[r.conflitoId] ?? null} />)}
-          <OrbitControls makeDefault onStart={() => { setPedido(null); setVista("livre"); }} />
+          {/* mexer com o mouse só marca Livre: mudar o pedido mudaria a chave do Foco e reiniciaria a animação (puxão) */}
+          <OrbitControls makeDefault onStart={() => setVista("livre")} />
           <Foco alvo={foco} distancia={distancia} vez={`${focado?.vez ?? 0}:${direcao ? pedido?.vez ?? 0 : 0}`} direcao={direcao} />
           {regua && folga && <Regua3D r={regua} estado={folga.estado} etiquetas={etiquetasRegua} />}
         </Canvas>

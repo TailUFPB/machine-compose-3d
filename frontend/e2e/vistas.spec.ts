@@ -99,3 +99,32 @@ test.describe("folgas no painel", () => {
     await expect(page.getByTestId("diferenca-previa")).toContainText("GPU: sobram 90 mm → passa 10 mm");
   });
 });
+
+test.describe("vistas: casos da revisão final", () => {
+  const xyz = async (page: Page) => ((await camera(page)) ?? "").split(",").map(Number);
+
+  test("zoom com a roda logo depois de escolher uma vista não puxa a câmera de volta", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request));
+    await page.getByTestId("vista-lateral").click();
+    const assentada = await parada(page);
+    const caixa = (await cena(page).locator("canvas").boundingBox())!;
+    await page.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
+    await page.mouse.wheel(0, -600);   // uma rolada só: várias seguidas reinterrompem a animação e escondem o defeito
+    const logoDepois = await parada(page);
+    expect(logoDepois).not.toBe(assentada);           // o zoom mexeu
+    await page.waitForTimeout(1500);
+    expect(await camera(page)).toBe(logoDepois);      // e ninguém puxou de volta
+    await expect(cena(page)).toHaveAttribute("data-vista", "livre");
+  });
+
+  test("depois de clicar num conflito, a vista Topo ainda move a câmera", async ({ page, request }) => {
+    await abrirCena(page, await criarBuild(request, ["case-nr200p"]));
+    await page.getByTestId("conflito").first().click();
+    await parada(page);
+    await page.getByTestId("vista-topo").click();
+    await parada(page);
+    const [x, , z] = await xyz(page);
+    expect(Math.abs(x)).toBeLessThan(0.2);   // câmera em cima do gabinete
+    expect(Math.abs(z)).toBeLessThan(0.2);
+  });
+});

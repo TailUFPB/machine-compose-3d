@@ -364,3 +364,26 @@ describe("reguaDe", () => {
     expect(VISTA_DA_FOLGA).toEqual({ gpu: "lateral", cooler: "topo", memoria: "topo", fonte: "topo" });
   });
 });
+
+describe("regioesDeConflito com folgas da ficha", () => {
+  const curto = p("case", "gabinete", { dimensoes: { c: 376, a: 292, l: 185 }, gpu_max_mm: 330 }, "Gabinete");
+  const c: Cena = { ...cena(curto, placa("ITX"), gpu(400, 2)),
+    conflitos: [{ id: "par:gpu_comprimento:case+gpu", itens: ["gpu", "case"], descricao: "A placa de vídeo não cabe", severidade: "bloqueante" }] };
+  const folga = (sobra: number): Folga => ({ id: "gpu", peca: "gpu", limite_de: "case", tamanho_mm: 400, limite_mm: 400 + sobra, sobra_mm: sobra, estado: sobra < 0 ? "nao_cabe" : "justa", dica: null });
+
+  it("o excesso da região é o da ficha, igual ao da régua", () => {
+    const [r] = regioesDeConflito(montarCena(c), c.conflitos, [folga(-70)]);
+    expect(r.excessoMm).toBe(70);
+    expect(r.texto).toBe("A placa de vídeo não cabe (passa 70 mm)");
+  });
+
+  it("se a ficha diz que cabe, a região não diz que passa", () => {
+    const [r] = regioesDeConflito(montarCena(c), c.conflitos, [folga(0)]);
+    expect(r.excessoMm).toBeNull();
+    expect(r.texto).toBe("A placa de vídeo não cabe");
+  });
+
+  it("sem folga da medida, vale a geometria como antes", () => {
+    expect(regioesDeConflito(montarCena(c), c.conflitos, [])[0].excessoMm).toBe(54);
+  });
+});
