@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import json
 
-from .. import llm
+from .. import fluxo, llm
 from ..folgas import COOLER_JUSTA_MM, GPU_JUSTA_MM, RAM_AJUSTE_MM, limite_gpu, radiador_na_frente
 from ..modelos import Achado, BuildItem, Componente, Correcao
 from ..store import Store
 from ..tracing import span
-from .regras import CONSUMO_BASE_W, _achado, _trocar
+from .regras import CONSUMO_BASE_W, _achado, _adicionar, _trocar
 
 
 def _pecas(store: Store, itens: list[BuildItem]) -> dict[str, Componente]:
@@ -26,7 +26,7 @@ def _pecas(store: Store, itens: list[BuildItem]) -> dict[str, Componente]:
     return out
 
 
-def plataforma(store: Store, p: dict[str, Componente]) -> list[Achado]:
+def plataforma(store: Store, p: dict[str, Componente], extras: list[tuple[Componente, int]] = ()) -> list[Achado]:
     cpu, mb, ram = p.get("cpu"), p.get("placa_mae"), p.get("memoria")
     out = []
     if cpu and mb and cpu.specs["socket"] == mb.specs["socket"] and cpu.specs["bios_min"] > mb.specs["bios_nivel"]:
@@ -55,7 +55,7 @@ def plataforma(store: Store, p: dict[str, Componente]) -> list[Achado]:
     return out
 
 
-def espaco_fisico(store: Store, p: dict[str, Componente]) -> list[Achado]:
+def espaco_fisico(store: Store, p: dict[str, Componente], extras: list[tuple[Componente, int]] = ()) -> list[Achado]:
     gpu, case, cooler, ram = p.get("gpu"), p.get("gabinete"), p.get("cooler"), p.get("memoria")
     out = []
     # radiador na frente (sem posição na ficha vale a frente, como na cena); no topo ele não disputa espaço com a GPU
@@ -83,7 +83,7 @@ def espaco_fisico(store: Store, p: dict[str, Componente]) -> list[Achado]:
     return out
 
 
-def eletrico(store: Store, p: dict[str, Componente]) -> list[Achado]:
+def eletrico(store: Store, p: dict[str, Componente], extras: list[tuple[Componente, int]] = ()) -> list[Achado]:
     gpu, psu, cpu = p.get("gpu"), p.get("fonte"), p.get("cpu")
     out = []
     if not (gpu and psu):
@@ -126,10 +126,42 @@ def eletrico(store: Store, p: dict[str, Componente]) -> list[Achado]:
     return out
 
 
-REVISORES = {"plataforma": plataforma, "espaco_fisico": espaco_fisico, "eletrico": eletrico}
+def fluxo_de_ar(store: Store, p: dict[str, Componente], extras: list[tuple[Componente, int]] = ()) -> list[Achado]:
+    """Balanço de entrada e saída, ventoinhas para o calor e radiador na frente com GPU quente (`app/fluxo.py`).
+    Não são conflitos de encaixe: `fisico=False`, a cena não pinta peça por isso."""
+    f, case, cooler, gpu, cpu = fluxo.calcular(p, list(extras)), p.get("gabinete"), p.get("cooler"), p.get("gpu"), p.get("cpu")
+    if not f:
+        return []
+    out = []
+    if f.entrada == 0:
+        out.append(_achado("fluxo:sem_entrada", "atencao", [case],
+                           f"Sem ventoinha de entrada no {case.nome}: o ar frio só entra pelas frestas. "
+                           "Ponha uma ventoinha na frente puxando ar para dentro."))
+    elif f.pressao == "negativa":
+        out.append(_achado("fluxo:pressao_negativa", "sugestao", [case],
+                           f"Pressão negativa ({f.entrada} de entrada, {f.saida} de saída): o gabinete puxa poeira pelas "
+                           "frestas; ponha mais uma ventoinha de entrada na frente."))
+    if len(f.ventoinhas) < f.recomendadas:
+        tem_pacote = any(c.specs.get("categoria") == "ventoinhas" for c, _ in extras)
+        quentes = [c for c in (cpu, gpu) if c]
+        texto = (f"Calor estimado de {f.calor_w} W (TDP da CPU e da GPU) pede umas {f.recomendadas} ventoinhas "
+                 f"(estimativa: uma a cada {fluxo.W_POR_FAN} W); a build tem {len(f.ventoinhas)}.")
+        out.append(_achado("fluxo:poucas_fans", "atencao", [case, *quentes],
+                           texto + (" Faltam vagas no gabinete para mais ventoinhas." if tem_pacote else ""),
+                           None if tem_pacote else _adicionar(store, "extra", lambda c: c.specs.get("categoria") == "ventoinhas")))
+    if gpu and fluxo.radiador_na_frente(cooler) and gpu.specs.get("tdp", 0) >= fluxo.GPU_QUENTE_W:
+        topo = (case.specs.get("posicoes_fan") or {}).get("topo", 0) * fluxo.FAN_MM >= (cooler.specs.get("radiador_mm") or 0)
+        out.append(_achado("fluxo:radiador_gpu", "sugestao", [cooler, gpu],
+                           f"O radiador na frente sopra ar já aquecido pela CPU na GPU de {gpu.specs['tdp']} W."
+                           + (" O gabinete aceita o radiador no topo, como saída: prefira o topo." if topo else "")))
+    return out
+
+
+REVISORES = {"plataforma": plataforma, "espaco_fisico": espaco_fisico, "eletrico": eletrico, "fluxo_de_ar": fluxo_de_ar}
 FOCO = {"plataforma": "BIOS, chipset, CPUs suportadas, QVL de memória",
         "espaco_fisico": "conflitos de montagem: radiador x GPU, RAM alta x cooler, folgas",
-        "eletrico": "picos transitórios, conectores 12V-2x6 e 8 pinos, qualidade da fonte"}
+        "eletrico": "picos transitórios, conectores 12V-2x6 e 8 pinos, qualidade da fonte",
+        "fluxo_de_ar": "fluxo de ar: entrada e saída de ar, pressão, ventoinhas para o calor, radiador e GPU"}
 
 
 def _passada_llm(nome: str, p: dict[str, Componente], ja: list[Achado]) -> list[Achado]:
@@ -156,10 +188,11 @@ def _passada_llm(nome: str, p: dict[str, Componente], ja: list[Achado]) -> list[
 def revisar(store: Store, itens: list[BuildItem], nomes: list[str] | None = None, llm: bool = True) -> list[Achado]:
     """`llm=False` pula a segunda passada (a prévia da cena só precisa dos achados determinísticos)."""
     p = _pecas(store, itens)
+    extras = [(c, i.quantidade) for i in itens if (c := store.componentes.get(i.componente_id)) and c.tipo == "extra"]
     out: list[Achado] = []
     for nome in nomes or list(REVISORES):
         with span(f"revisor_{nome}"):
-            achados = REVISORES[nome](store, p)
+            achados = REVISORES[nome](store, p, extras)
             for a in achados:
                 a.agente = nome
             out += achados + (_passada_llm(nome, p, achados) if llm else [])

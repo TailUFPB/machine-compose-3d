@@ -153,10 +153,7 @@ def avaliar(store: Store, itens: list[BuildItem]) -> list[Achado]:
         achados.append(_achado("faltante:pasta", "sugestao", [cooler],
                                "Pasta térmica: confira se o cooler já traz; se for reaproveitar, compre uma.",
                                _adicionar(store, "extra", lambda c: c.specs["categoria"] == "pasta_termica")))
-    if case and case.specs["fans_inclusos"] < 2 and "ventoinhas" not in extras:
-        achados.append(_achado("faltante:fans", "sugestao", [case],
-                               f"O {case.nome} vem com {case.specs['fans_inclusos']} ventoinha(s): fluxo de ar fraco.",
-                               _adicionar(store, "extra", lambda c: c.specs["categoria"] == "ventoinhas")))
+    # ventoinhas: o revisor de fluxo de ar (fluxo:poucas_fans) conta gabinete, pacote e radiador contra o calor
     if mb and not mb.specs["wifi"] and "wifi" not in extras:
         achados.append(_achado("faltante:wifi", "sugestao", [mb], f"A {mb.nome} não tem Wi-Fi: use cabo ou um adaptador.",
                                _adicionar(store, "extra", lambda c: c.specs["categoria"] == "wifi")))
