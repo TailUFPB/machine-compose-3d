@@ -31,6 +31,7 @@ class Store:
         self.historico_precos: list[dict] = seed["historico_precos"]  # ofertas já coletadas
         self.cache_precos: dict[str, dict] = {}                      # componente_id -> {resultado, em}
         self.links_resolvidos: dict[str, str] = {}                   # "loja|titulo" -> URL direta resolvida no clique
+        self.consumo_serper: dict[str, int] = {}                     # "YYYY-MM-DD" -> créditos gastos
         self.builds: dict[str, Build] = {}
         self.propostas: dict[str, Any] = {}                          # build_id -> Proposta pendente
         self._sb = None
@@ -59,18 +60,34 @@ class Store:
                                           for a in b.achados], substituir=("build_id", b.id))
 
     # --- Supabase opcional
-    def espelhar(self, tabela: str, linhas: list[dict], substituir: tuple[str, str] | None = None) -> None:
+    def _supabase(self):
         s = get_settings()
         if not s.supabase_url:
-            return
+            return None
+        if self._sb is None:
+            from supabase import create_client
+            self._sb = create_client(s.supabase_url, s.supabase_key)
+        return self._sb
+
+    def ler_tabela(self, tabela: str) -> list[dict]:
         try:
-            if self._sb is None:
-                from supabase import create_client
-                self._sb = create_client(s.supabase_url, s.supabase_key)
+            sb = self._supabase()
+            if sb is None:
+                return []
+            return sb.table(tabela).select("*").execute().data or []
+        except Exception as exc:  # espelho nunca derruba a API
+            logger.warning("Supabase leitura (%s) falhou: %s", tabela, exc)
+            return []
+
+    def espelhar(self, tabela: str, linhas: list[dict], substituir: tuple[str, str] | None = None) -> None:
+        try:
+            sb = self._supabase()
+            if sb is None:
+                return
             if substituir:
-                self._sb.table(tabela).delete().eq(*substituir).execute()
+                sb.table(tabela).delete().eq(*substituir).execute()
             if linhas:
-                self._sb.table(tabela).upsert(linhas).execute()
+                sb.table(tabela).upsert(linhas).execute()
         except Exception as exc:  # espelho nunca derruba a API
             logger.warning("Supabase (%s) falhou: %s", tabela, exc)
 
