@@ -221,3 +221,34 @@ def test_trocar_item_atomico_e_equivalencia_por_categoria(client, store):
     assert resp_troca.status_code == 200
     ids = {i["componente_id"] for i in resp_troca.json()["itens"]}
     assert gpu_topo.id not in ids and alt_gpu["para_id"] in ids
+
+
+def test_componentes_e_agente_nao_disparam_busca_serper(client, store, monkeypatch, tmp_path):
+    from app import precos
+    from app.config import get_settings
+
+    chamadas = []
+
+    def bloquear_rede(req, timeout):
+        chamadas.append(req.full_url)
+        raise AssertionError("Catálogo e Agente não devem gastar crédito na Serper")
+
+    monkeypatch.setattr(precos, "CACHE_DISCO", tmp_path / "precos.json")
+    monkeypatch.setattr(precos.urllib.request, "urlopen", bloquear_rede)
+    monkeypatch.setattr(get_settings(), "busca_provider", "serper")
+    monkeypatch.setattr(get_settings(), "serper_api_key", "chave-teste")
+    store.cache_precos.clear()
+
+    assert client.get("/componentes").status_code == 200
+    bid = criar(client, modo="agente", orcamento=7000)
+    assert client.post(f"/builds/{bid}/agente").status_code == 200
+    assert chamadas == []
+
+
+def test_saude_e_endpoint_consumo_expoem_cota_serper(client):
+    saude = client.get("/saude").json()
+    assert saude["consumo_serper"]["limite"] == 50
+    assert saude["consumo_serper"]["usados"] == 0
+    assert saude["consumo_serper"]["restantes"] == 50
+    consumo = client.get("/precos/consumo").json()
+    assert consumo == saude["consumo_serper"]

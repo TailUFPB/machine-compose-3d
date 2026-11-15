@@ -63,8 +63,22 @@ LOJAS_DOMINIOS: dict[str, str] = {
     "Amazon": "amazon.com.br",
 }
 SERPER_SIMULTANEAS = 4      # acima disso o Serper devolve 429 (medido no OrçaAI)
+TTL_POR_TIPO_DIAS: dict[str, int] = {
+    "gpu": 3,
+    "cpu": 3,
+    "memoria": 3,
+    "armazenamento": 3,
+    "placa_mae": 7,
+    "fonte": 7,
+    "cooler": 7,
+    "extra": 14,
+    "gabinete": 20,
+}
 CACHE_DISCO = Path(__file__).resolve().parent.parent / ".cache" / "precos.json"
 _trava_disco = threading.Lock()
+_trava_renovacao = threading.Lock()
+_trava_cota = threading.Lock()
+_renovando: set[str] = set()
 
 
 class Oferta(BaseModel):
@@ -215,6 +229,21 @@ def _loja(fonte: str) -> str | None:
     return next((l for l in _lojas() if norm(l) in norm(fonte)), None)
 
 
+def _familia_de(comp: Componente) -> str | None:
+    """Deriva o nome da família para agrupar versões próximas em uma única busca."""
+    if comp.tipo == "gpu":
+        if m := re.search(r"\b(RTX|GTX|RX)\s*(\d{4})\b", comp.modelo, re.I):
+            return f"{m.group(1).upper()} {m.group(2)}"
+        if m := re.search(r"\bArc\s*([AB]\d{3})\b", comp.modelo, re.I):
+            return f"Arc {m.group(1).upper()}"
+    elif comp.tipo == "cpu":
+        if m := re.search(r"\bRyzen\s+([3579])\s+(\d{4})", comp.modelo, re.I):
+            return f"Ryzen {m.group(1)} {m.group(2)}"
+        if m := re.search(r"\bCore\s+(i[3579]-\d{4,5})", comp.modelo, re.I):
+            return f"Core {m.group(1).lower()}"
+    return None
+
+
 def _query_principal(comp: Componente) -> str:
     if comp.marca.strip().lower() in _MARCAS_GENERICAS:
         return comp.modelo
@@ -226,21 +255,55 @@ def _query_curta(comp: Componente) -> str:
     return re.sub(r"\s+", " ", curta).strip()
 
 
-def _postar_serper(url: str, payload: dict, contexto: str) -> dict | None:
+def _hoje_iso(agora: datetime | None = None) -> str:
+    return (agora or datetime.now(timezone.utc)).date().isoformat()
+
+
+def status_consumo(store: Store, agora: datetime | None = None) -> dict:
+    hoje = _hoje_iso(agora)
+    limite = get_settings().serper_limite_diario
+    with _trava_cota:
+        usados = store.consumo_serper.get(hoje, 0)
+    return {"data": hoje, "usados": usados, "limite": limite, "restantes": max(0, limite - usados)}
+
+
+def _cota_disponivel(store: Store) -> bool:
+    hoje = _hoje_iso()
+    limite = get_settings().serper_limite_diario
+    with _trava_cota:
+        return store.consumo_serper.get(hoje, 0) < limite
+
+
+def _registrar_consumo(store: Store) -> None:
+    hoje = _hoje_iso()
+    with _trava_cota:
+        total = store.consumo_serper.get(hoje, 0) + 1
+        store.consumo_serper[hoje] = total
+    store.espelhar("consumo_serper", [{"data": hoje, "creditos": total}])
+    _salvar_disco(store)
+
+
+def _postar_serper(url: str, payload: dict, contexto: str, store: Store | None = None) -> dict | None:
+    if store is not None and not _cota_disponivel(store):
+        logger.warning("Limite diário da Serper atingido ao consultar %s", contexto)
+        return None
     corpo = json.dumps(payload).encode()
     req = urllib.request.Request(url, corpo, {"X-API-KEY": get_settings().serper_api_key,
                                               "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
-            return json.load(r)
+            dados = json.load(r)
+        if store is not None:
+            _registrar_consumo(store)
+        return dados
     except Exception as exc:
         logger.warning("Serper falhou para %s: %s", contexto, exc)
         return None
 
 
-def _consultar_shopping_serper(comp: Componente, query: str) -> list[dict] | None:
+def _consultar_shopping_serper(store: Store, comp: Componente, query: str, num: int = 20) -> list[dict] | None:
     """Google Shopping via serper.dev: preço, loja e link estruturados, sem LLM. Falha = None."""
-    dados = _postar_serper(SERPER_URL, {"q": query, "gl": "br", "hl": "pt-br", "num": 20}, comp.id)
+    dados = _postar_serper(SERPER_URL, {"q": query, "gl": "br", "hl": "pt-br", "num": num}, comp.id, store=store)
     if dados is None:
         return None
     agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -259,14 +322,17 @@ def _poucas_ofertas(r: ResultadoPreco) -> bool:
     return len(r.ofertas) < MIN_OFERTAS_FALLBACK or len({o.loja for o in r.ofertas}) < MIN_LOJAS_FALLBACK
 
 
-def _buscar_serper(comp: Componente) -> list[dict] | None:
-    q1 = _query_principal(comp)
-    anuncios = _consultar_shopping_serper(comp, q1)
+def _buscar_serper(store: Store, comp: Componente) -> list[dict] | None:
+    familia = _familia_de(comp)
+    irmaos = [c for c in store.por_tipo(comp.tipo) if _familia_de(c) == familia] if familia else []
+    usar_familia = familia is not None and len(irmaos) >= 2
+    q1 = familia if usar_familia else _query_principal(comp)
+    anuncios = _consultar_shopping_serper(store, comp, q1, num=40 if usar_familia else 20)
     if anuncios is None:
         return None
     q2 = _query_curta(comp)
     if q2 != q1 and _poucas_ofertas(calcular(comp, anuncios)):
-        extras = _consultar_shopping_serper(comp, q2)
+        extras = _consultar_shopping_serper(store, comp, q2)
         if extras:
             vistos = {(a["loja"], a["titulo"], a["url"]) for a in anuncios}
             anuncios.extend(a for a in extras if (a["loja"], a["titulo"], a["url"]) not in vistos)
@@ -275,7 +341,7 @@ def _buscar_serper(comp: Componente) -> list[dict] | None:
 
 def _buscar(store: Store, comp: Componente) -> list[dict] | None:
     if get_settings().preco_real:
-        return _buscar_serper(comp)
+        return _buscar_serper(store, comp)
     lojas = set(_lojas())
     return [a for a in store.anuncios if a["componente_id"] == comp.id and a["loja"] in lojas]
 
@@ -337,32 +403,88 @@ def calcular(comp: Componente, anuncios: list[dict]) -> ResultadoPreco:
     return r
 
 
-def pesquisar(store: Store, componente_id: str, agora: datetime | None = None) -> ResultadoPreco:
-    agora = agora or datetime.now(timezone.utc)
-    comp = store.get(componente_id)
-    if comp is None:
-        return ResultadoPreco(componente_id=componente_id)
-    cache = store.cache_precos.get(componente_id)
-    validade = timedelta(days=get_settings().preco_cache_dias)
-    if cache and agora - cache["em"] < validade:
-        return cache["resultado"].model_copy(update={"do_cache": True})
+def _validade_para(comp: Componente) -> timedelta:
+    dias = TTL_POR_TIPO_DIAS.get(comp.tipo, get_settings().preco_cache_dias)
+    return timedelta(days=dias)
+
+
+def _registrar_resultado(store: Store, comp: Componente, r: ResultadoPreco, anuncios: list[dict] | None, agora: datetime) -> None:
+    if anuncios is not None and get_settings().preco_real:   # guarda o bruto: regra nova recalcula sem gastar crédito
+        store.anuncios = [a for a in store.anuncios if a["componente_id"] != comp.id] + anuncios
+    if r.tem_preco or (anuncios is not None and get_settings().preco_real):
+        store.cache_precos[comp.id] = {"em": agora, "resultado": r}
+        novos = [{"componente_id": comp.id, "loja": o.loja, "preco": o.preco, "url": o.url, "coletado_em": o.coletado_em}
+                 for o in r.ofertas]
+        store.historico_precos.extend(novos)
+        store.espelhar("ofertas", novos)
+        store.espelhar("cache_anuncios", [{
+            "componente_id": comp.id,
+            "familia": _familia_de(comp),
+            "anuncios": anuncios or [],
+            "buscado_em": agora.isoformat(),
+        }])
+
+
+def _distribuir_para_familia(store: Store, comp: Componente, anuncios: list[dict], agora: datetime) -> None:
+    familia = _familia_de(comp)
+    if not familia:
+        return
+    for irmao in store.por_tipo(comp.tipo):
+        if irmao.id == comp.id or _familia_de(irmao) != familia:
+            continue
+        anuncios_irmao = [{**a, "componente_id": irmao.id} for a in anuncios]
+        r_irmao = calcular(irmao, anuncios_irmao)
+        if r_irmao.tem_preco:
+            _registrar_resultado(store, irmao, r_irmao, anuncios_irmao, agora)
+
+
+def _executar_busca_e_salvar(store: Store, comp: Componente, agora: datetime, cache: dict | None = None) -> ResultadoPreco:
     with span("pesquisa_preco", input={"componente": comp.nome}):
         anuncios = _buscar(store, comp)
         r = calcular(comp, anuncios or [])
     if not r.tem_preco and cache:   # busca falhou: cache vencido serve de reserva, rotulado
         return cache["resultado"].model_copy(update={"do_cache": True, "vencido": True})
-    if anuncios is not None and get_settings().preco_real:   # guarda o bruto: regra nova recalcula sem gastar crédito
-        store.anuncios = [a for a in store.anuncios if a["componente_id"] != comp.id] + anuncios
-    # preço real: busca que respondeu sem oferta válida também fica no cache (senão cada consulta gasta crédito)
-    if r.tem_preco or (anuncios is not None and get_settings().preco_real):
-        store.cache_precos[componente_id] = {"em": agora, "resultado": r}
-        novos = [{"componente_id": comp.id, "loja": o.loja, "preco": o.preco, "url": o.url, "coletado_em": o.coletado_em}
-                 for o in r.ofertas]
-        store.historico_precos.extend(novos)
-        store.espelhar("ofertas", novos)
-    if get_settings().preco_real and componente_id in store.cache_precos:
+    _registrar_resultado(store, comp, r, anuncios, agora)
+    if anuncios and get_settings().preco_real:
+        _distribuir_para_familia(store, comp, anuncios, agora)
+    if get_settings().preco_real and comp.id in store.cache_precos:
         _salvar_disco(store)
     return r
+
+
+def _agendar_renovacao(store: Store, comp: Componente) -> None:
+    with _trava_renovacao:
+        if comp.id in _renovando:
+            return
+        _renovando.add(comp.id)
+
+    def _rodar() -> None:
+        try:
+            _executar_busca_e_salvar(store, comp, datetime.now(timezone.utc), store.cache_precos.get(comp.id))
+        finally:
+            with _trava_renovacao:
+                _renovando.discard(comp.id)
+
+    threading.Thread(target=_rodar, daemon=True).start()
+
+
+def pesquisar(store: Store, componente_id: str, agora: datetime | None = None, permitir_busca: bool = True) -> ResultadoPreco:
+    agora = agora or datetime.now(timezone.utc)
+    comp = store.get(componente_id)
+    if comp is None:
+        return ResultadoPreco(componente_id=componente_id)
+    cache = store.cache_precos.get(componente_id)
+    validade = _validade_para(comp)
+    if cache and agora - cache["em"] < validade:
+        return cache["resultado"].model_copy(update={"do_cache": True})
+    if not permitir_busca and get_settings().preco_real:
+        if cache:
+            return cache["resultado"].model_copy(update={"do_cache": True, "vencido": True})
+        return ResultadoPreco(componente_id=componente_id)
+    if cache and get_settings().preco_real:
+        _agendar_renovacao(store, comp)
+        return cache["resultado"].model_copy(update={"do_cache": True, "vencido": True})
+    return _executar_busca_e_salvar(store, comp, agora, cache)
 
 
 # --- preço real: cache em disco (reiniciar não gasta crédito) e pré-busca em paralelo
@@ -393,6 +515,7 @@ def resolver_link_loja(store: Store, loja: str, titulo: str, fallback_url: str) 
         SERPER_ORGANIC_URL,
         {"q": f"site:{dominio} {titulo}", "gl": "br", "hl": "pt-br", "num": 5},
         f"link:{loja}",
+        store=store,
     )
     if dados is None:
         return fallback_url
@@ -400,6 +523,7 @@ def resolver_link_loja(store: Store, loja: str, titulo: str, fallback_url: str) 
     if not resolvido:
         return fallback_url
     store.links_resolvidos[chave] = resolvido
+    store.espelhar("links_resolvidos", [{"chave": chave, "url": resolvido, "atualizado_em": datetime.now(timezone.utc).isoformat()}])
     _salvar_disco(store)
     return resolvido
 
@@ -413,22 +537,46 @@ def _salvar_disco(store: Store) -> None:
             "anuncios": store.anuncios,
             "historico": store.historico_precos,
             "links_resolvidos": store.links_resolvidos,
+            "consumo_serper": store.consumo_serper,
         }, ensure_ascii=False))
+
+
+def _hidratar_supabase(store: Store) -> None:
+    for row in store.ler_tabela("cache_anuncios"):
+        cid = row.get("componente_id")
+        comp = store.get(cid) if cid else None
+        if not comp or not row.get("buscado_em"):
+            continue
+        em = datetime.fromisoformat(str(row["buscado_em"]))
+        atual = store.cache_precos.get(cid)
+        if atual and atual["em"] >= em:
+            continue
+        anuncios = row.get("anuncios") or []
+        store.anuncios = [a for a in store.anuncios if a["componente_id"] != cid] + anuncios
+        store.cache_precos[cid] = {"em": em, "resultado": calcular(comp, anuncios)}
+    for row in store.ler_tabela("links_resolvidos"):
+        if row.get("chave") and row.get("url"):
+            store.links_resolvidos.setdefault(row["chave"], row["url"])
+    for row in store.ler_tabela("consumo_serper"):
+        if row.get("data") and row.get("creditos") is not None:
+            data = str(row["data"])
+            store.consumo_serper[data] = max(store.consumo_serper.get(data, 0), int(row["creditos"]))
 
 
 def carregar_disco(store: Store) -> None:
     """Com provedor real, saem os anúncios e o histórico fictícios do seed e entra o que já foi coletado de verdade.
     O preço é recalculado dos anúncios brutos, então regra nova de "mesmo produto" vale sem nova busca."""
-    store.anuncios, store.historico_precos, store.cache_precos, store.links_resolvidos = [], [], {}, {}
-    if not CACHE_DISCO.exists():
-        return
-    d = json.loads(CACHE_DISCO.read_text())
-    store.anuncios, store.historico_precos = d["anuncios"], d["historico"]
-    store.links_resolvidos = d.get("links_resolvidos", {})
-    for cid, em in d["buscado_em"].items():
-        if comp := store.get(cid):
-            store.cache_precos[cid] = {"em": datetime.fromisoformat(em),
-                                       "resultado": calcular(comp, [a for a in store.anuncios if a["componente_id"] == cid])}
+    store.anuncios, store.historico_precos, store.cache_precos, store.links_resolvidos, store.consumo_serper = [], [], {}, {}, {}
+    if CACHE_DISCO.exists():
+        d = json.loads(CACHE_DISCO.read_text())
+        store.anuncios, store.historico_precos = d["anuncios"], d["historico"]
+        store.links_resolvidos = d.get("links_resolvidos", {})
+        store.consumo_serper = {str(k): int(v) for k, v in d.get("consumo_serper", {}).items()}
+        for cid, em in d["buscado_em"].items():
+            if comp := store.get(cid):
+                store.cache_precos[cid] = {"em": datetime.fromisoformat(em),
+                                           "resultado": calcular(comp, [a for a in store.anuncios if a["componente_id"] == cid])}
+    _hidratar_supabase(store)
 
 
 def aquecer(store: Store) -> None:
@@ -439,9 +587,14 @@ def aquecer(store: Store) -> None:
                 len(store.componentes))
 
 
-def preco_ref(store: Store, componente_id: str) -> float | None:
+def consultar_cache(store: Store, componente_id: str, agora: datetime | None = None) -> ResultadoPreco:
+    """Lê apenas do cache (ou seed offline) sem disparar chamadas à Serper."""
+    return pesquisar(store, componente_id, agora=agora, permitir_busca=False)
+
+
+def preco_ref(store: Store, componente_id: str, permitir_busca: bool = False) -> float | None:
     """Preço mediano usado pelo agente e pelo resultado (None = sem preço com fonte)."""
-    return pesquisar(store, componente_id).preco_med
+    return pesquisar(store, componente_id, permitir_busca=permitir_busca).preco_med
 
 
 def historico(store: Store, componente_id: str) -> list[dict]:

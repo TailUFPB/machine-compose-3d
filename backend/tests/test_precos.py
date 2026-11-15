@@ -52,11 +52,11 @@ def test_oferta_sem_url_descartada():
 def test_cache_sete_dias_e_reserva_vencida(store):
     t0 = datetime(2026, 11, 10, tzinfo=timezone.utc)
     hist_antes = len(store.historico_precos)
-    r1 = precos.pesquisar(store, "rx-7600", agora=t0)
+    r1 = precos.pesquisar(store, "psu-cx650", agora=t0)
     assert not r1.do_cache and len(store.historico_precos) > hist_antes
-    assert precos.pesquisar(store, "rx-7600", agora=t0 + timedelta(days=6)).do_cache
-    store.anuncios = [a for a in store.anuncios if a["componente_id"] != "rx-7600"]   # busca falha
-    r3 = precos.pesquisar(store, "rx-7600", agora=t0 + timedelta(days=8))
+    assert precos.pesquisar(store, "psu-cx650", agora=t0 + timedelta(days=6)).do_cache
+    store.anuncios = [a for a in store.anuncios if a["componente_id"] != "psu-cx650"]   # busca falha
+    r3 = precos.pesquisar(store, "psu-cx650", agora=t0 + timedelta(days=8))
     assert r3.do_cache and r3.vencido and r3.preco_med == r1.preco_med
 
 

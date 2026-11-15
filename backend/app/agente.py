@@ -16,7 +16,7 @@ from .compat.regras import consumo_estimado
 from .config import get_settings
 from .fps import estimar_build
 from .modelos import Achado, Build, BuildItem, Componente, Proposta
-from .precos import brl, pesquisar, preco_ref
+from .precos import brl, consultar_cache, preco_ref
 from .store import Store
 from .tracing import span, trace
 
@@ -28,7 +28,7 @@ def _somar_precos(store: Store, itens: list[BuildItem], minimo: bool = False) ->
     for item in itens:
         if item.ja_tenho:
             continue
-        r = pesquisar(store, item.componente_id)
+        r = consultar_cache(store, item.componente_id)
         valor = (r.preco_min if minimo else r.preco_med) or 0.0
         total += valor * item.quantidade
     return round(total, 2)
