@@ -40,6 +40,13 @@ export interface Resultado {
   cabe: boolean; diferenca: number; sem_preco: string[]; alternativas_sem_preco: AlternativaSemPreco[]; ja_tenho: string[]; trocas: Troca[]; frete: string;
 }
 export interface Oferta { loja: string; preco: number; url: string; titulo: string; coletado_em: string; condicao_pagamento?: "a_vista" | "parcelado" | "desconhecida" }
+export interface ConsumoSerper { data: string; usados: number; limite: number; restantes: number }
+
+export function formatarConsumoSerper(consumo?: ConsumoSerper | null): string {
+  if (!consumo) return "";
+  const sufixo = consumo.restantes <= 0 ? " (limite atingido)" : "";
+  return `Créditos Serper hoje: ${consumo.usados}/${consumo.limite}${sufixo}`;
+}
 export interface ResultadoPreco {
   componente_id: string; ofertas: Oferta[]; descartes: { loja: string; titulo: string; motivo: string }[];
   preco_min: number | null; preco_med: number | null; preco_max: number | null; qtd_lojas: number; confianca: string | null;
@@ -79,7 +86,8 @@ async function req<T>(caminho: string, init?: RequestInit): Promise<T> {
 const post = <T,>(c: string, corpo?: unknown) => req<T>(c, { method: "POST", body: JSON.stringify(corpo ?? {}) });
 
 export const api = {
-  saude: () => req<{ ok: boolean; llm: string; dados: string }>("/saude"),
+  saude: () => req<{ ok: boolean; llm: string; busca?: string; dados: string; consumo_serper?: ConsumoSerper }>("/saude"),
+  consumo: () => req<ConsumoSerper>("/precos/consumo"),
   jogos: () => req<{ jogos: { id: string; nome: string }[]; resolucoes: string[]; preset: string }>("/jogos"),
   builds: () => req<Build[]>("/builds"),
   build: (id: string) => req<Build>(`/builds/${id}`),

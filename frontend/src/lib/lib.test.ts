@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { API, type Cena, ehOfertaUnica, linkOferta } from "./api";
+import { API, type Cena, ehOfertaUnica, formatarConsumoSerper, linkOferta } from "./api";
 import { foraDoGabinete, montarCena, posicaoTutorial } from "./cena";
 import { brl, quadroEm } from "./formato";
 
@@ -72,5 +72,11 @@ describe("ofertas e link no clique final", () => {
     expect(ehOfertaUnica(0)).toBe(false);
     expect(ehOfertaUnica(2)).toBe(false);
     expect(ehOfertaUnica(null)).toBe(false);
+  });
+
+  it("formata o contador diário de créditos Serper", () => {
+    expect(formatarConsumoSerper({ data: "2026-11-13", usados: 12, limite: 50, restantes: 38 })).toBe("Créditos Serper hoje: 12/50");
+    expect(formatarConsumoSerper({ data: "2026-11-13", usados: 50, limite: 50, restantes: 0 })).toBe("Créditos Serper hoje: 50/50 (limite atingido)");
+    expect(formatarConsumoSerper(null)).toBe("");
   });
 });

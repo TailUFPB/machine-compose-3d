@@ -4,7 +4,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import {
   Entrada, ErroBloco, Jogos, type Metas, Montagem, PropostaCard, ResultadoPainel, Revisao, useAcao, VisaoGeral,
 } from "@/components/Paineis";
-import { api, type Build, type Cena, type Componente, type Proposta } from "@/lib/api";
+import { api, type Build, type Cena, type Componente, type ConsumoSerper, formatarConsumoSerper, type Proposta } from "@/lib/api";
 import { MODOS, rotuloBuild } from "@/lib/formato";
 
 const Cena3D = dynamic(() => import("@/components/Cena3D"), { ssr: false, loading: () => <span className="carregando" /> });
@@ -52,6 +52,7 @@ function useVista(): [string, (v: string) => void] {
 export default function Pagina() {
   const [vista, ir] = useVista();
   const [fonteDados, setFonteDados] = useState("");
+  const [consumoSerper, setConsumoSerper] = useState<ConsumoSerper | null>(null);
   const [jogos, setJogos] = useState<{ id: string; nome: string }[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, Componente>>({});
   const [builds, setBuilds] = useState<Build[]>([]);
@@ -68,6 +69,7 @@ export default function Pagina() {
     Promise.all([api.saude(), api.jogos(), api.catalogo(), api.builds()])
       .then(([s, j, c, b]) => {
         setFonteDados(s.dados);
+        setConsumoSerper(s.consumo_serper ?? null);
         setJogos(j.jogos);
         setCatalogo(Object.fromEntries(c.map((x) => [x.id, x])));
         setBuilds(b);
@@ -180,7 +182,12 @@ export default function Pagina() {
             <section className="card" aria-label="Cena 3D">{cena ? <Cena3D cena={cena} /> : <span className="carregando" />}</section>
           </>
         )}
-        {fonteDados && <p className="fonte-dados">{fonteDados}</p>}
+        {fonteDados && (
+          <p className="fonte-dados">
+            {fonteDados}
+            {consumoSerper && ` · ${formatarConsumoSerper(consumoSerper)}`}
+          </p>
+        )}
       </main>
     </>
   );

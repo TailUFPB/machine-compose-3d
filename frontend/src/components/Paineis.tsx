@@ -1,8 +1,8 @@
 "use client";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-  type Achado, api, type Build, type Componente, ehOfertaUnica, ErroApi, type Estimativa, type Importacao, linkOferta, type Modo, type Objetivos,
-  type Proposta, type Resultado, type ResultadoPreco, type Tipo,
+  type Achado, api, type Build, type Componente, type ConsumoSerper, ehOfertaUnica, ErroApi, type Estimativa, formatarConsumoSerper,
+  type Importacao, linkOferta, type Modo, type Objetivos, type Proposta, type Resultado, type ResultadoPreco, type Tipo,
 } from "@/lib/api";
 import { brl, brlRedondo, MODOS, SEVERIDADE, TIPOS } from "@/lib/formato";
 import Fluidez from "./Fluidez";
@@ -659,10 +659,13 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
   const { ocupado, erro, rodar } = useAcao();
   const [res, setRes] = useState<Resultado | null>(null);
   const [precos, setPrecos] = useState<ResultadoPreco[]>([]);
+  const [consumo, setConsumo] = useState<ConsumoSerper | null>(null);
   const assinatura = JSON.stringify(build.itens);
   useEffect(() => {
-    api.resultado(build.id).then(setRes).catch(() => setRes(null));
-    api.precos(build.id).then(setPrecos).catch(() => setPrecos([]));
+    Promise.all([
+      api.resultado(build.id).then(setRes).catch(() => setRes(null)),
+      api.precos(build.id).then(setPrecos).catch(() => setPrecos([])),
+    ]).finally(() => api.consumo().then(setConsumo).catch(() => setConsumo(null)));
   }, [build.id, assinatura]);
   const nome = (id: string) => catalogo[id]?.nome ?? id;
 
@@ -742,7 +745,13 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
       </div>
 
       <section className="card" aria-labelledby="pesq-titulo">
-        <div className="card-topo"><h2 id="pesq-titulo">Pesquisa de preço por peça</h2><span className="meta">Anúncio usado, kit, PC montado e outro modelo ficam de fora</span></div>
+        <div className="card-topo">
+          <h2 id="pesq-titulo">Pesquisa de preço por peça</h2>
+          <span className="meta">
+            Anúncio usado, kit, PC montado e outro modelo ficam de fora
+            {consumo && ` · ${formatarConsumoSerper(consumo)}`}
+          </span>
+        </div>
         <div className="rolagem">
           <table>
             <thead><tr><th>Peça</th><th>Ofertas aceitas</th><th className="num">Faixa</th><th className="num">Descartados</th><th>Histórico</th></tr></thead>
