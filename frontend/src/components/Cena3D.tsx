@@ -539,7 +539,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         {mostraRegioes && regioes.map((r) => medida(r) && (
           <span key={r.conflitoId} ref={(el) => { etiquetas.current[r.conflitoId] = el; }} className="medida" data-testid="medida-cena">{medida(r)}</span>
         ))}
-        <Canvas dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
+        <Canvas shadows={!leve} dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
           onPointerMissed={() => { limparToque(); if (!(previa && ultimoDedo.current)) setAberta(null); }}   // na prévia, o dedo no vazio só apaga o nome
           onCreated={({ gl }) => {   // a descrição textual fica ligada ao próprio canvas
             gl.domElement.setAttribute("role", "img");
@@ -547,7 +547,11 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
             gl.domElement.setAttribute("aria-describedby", idDescricao);
           }}>
           <hemisphereLight args={["#dbe8ff", "#2a2f3a", 0.8]} />   {/* céu frio em cima, chão escuro embaixo: dá volume às faces */}
-          <directionalLight position={[5, 8, 5]} intensity={1.1} />
+          <directionalLight position={[5, 8, 5]} intensity={1.1} castShadow={!leve} shadow-mapSize={[1024, 1024]} shadow-bias={-0.0005}
+            shadow-camera-left={-7} shadow-camera-right={7} shadow-camera-top={7} shadow-camera-bottom={-7} shadow-camera-near={1} shadow-camera-far={25} />
+          {gab && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, (-gab.tam[1] / 2 - 2) * ESCALA, 0]} receiveShadow raycast={semRaio}>
+            <planeGeometry args={[40, 40]} /><shadowMaterial opacity={0.35} />
+          </mesh>}   {/* chão invisível: só recebe a sombra do gabinete */}
           <directionalLight position={[-6, 3, -4]} intensity={0.45} />   {/* contraluz fraco: separa a silhueta do fundo */}
           {caixas.map((c) => c.modelo ? (
             <Peca3D key={c.chave} c={c} modelo={c.modelo} escala={ESCALA} aberto={alvo === c} oculta={aberto && alvo !== c && !abreGab}
