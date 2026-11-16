@@ -6,7 +6,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type MutableRefObject, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CatmullRomCurve3, Color, type Group, type InstancedMesh, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, Object3D, Quaternion, TOUCH, TubeGeometry, Vector3 } from "three";
 import type { Cena, Folga } from "@/lib/api";
-import { type Cabo, type Caixa, DIRECAO, type EstadoPasso, type Regiao, type Regua, type SetaAr, type Vec3, VISTA_DA_FOLGA, type Vista, caminhosDoAr, descricaoCena, descricaoFluxo, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito, setasDoFluxo } from "@/lib/cena";
+import { type Cabo, type Caixa, DICAS, DIRECAO, type EstadoPasso, type Regiao, type Regua, type SetaAr, type Vec3, VISTA_DA_FOLGA, type Vista, caminhosDoAr, descricaoCena, descricaoFluxo, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito, setasDoFluxo } from "@/lib/cena";
 import { progressoExplosao } from "@/lib/peca";
 import { CARENCIA_S, type Escolha, type Nivel, desceAuto, guardarEscolha, lerEscolha, nivelInicial, rotuloQualidade } from "@/lib/qualidade";
 import Peca3D from "./Peca3D";
@@ -519,7 +519,11 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         </>
       )}
       {tutorial && total > 0 && (
-        <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
+        <div className="passo" data-testid="passo-texto" aria-live="polite">
+          <progress value={passo + 1} max={total} aria-label={`Passo ${passo + 1} de ${total}`} />
+          <p style={{ margin: "6px 0 0" }}><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
+          {DICAS[cena.passos[passo]?.tipo] && <p className="dica-passo" data-testid="dica-passo">Dica: {DICAS[cena.passos[passo].tipo]}</p>}
+        </div>
       )}
       <div className="cena" data-testid="cena" data-fluxo={fluxoVisivel ? "on" : "off"} data-ventoinhas={cena.fluxo ? `${cena.fluxo.entrada}:${cena.fluxo.saida}` : ""} data-qualidade={nivel} data-escolha={escolha} data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
         data-vista={vista} data-regua={regua ? folga!.id : ""}>
@@ -542,8 +546,9 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
             gl.domElement.setAttribute("aria-label", "Montagem 3D da build");
             gl.domElement.setAttribute("aria-describedby", idDescricao);
           }}>
-          <ambientLight intensity={0.9} />
-          <directionalLight position={[5, 8, 5]} intensity={1.2} />
+          <hemisphereLight args={["#dbe8ff", "#2a2f3a", 0.8]} />   {/* céu frio em cima, chão escuro embaixo: dá volume às faces */}
+          <directionalLight position={[5, 8, 5]} intensity={1.1} />
+          <directionalLight position={[-6, 3, -4]} intensity={0.45} />   {/* contraluz fraco: separa a silhueta do fundo */}
           {caixas.map((c) => c.modelo ? (
             <Peca3D key={c.chave} c={c} modelo={c.modelo} escala={ESCALA} aberto={alvo === c} oculta={aberto && alvo !== c && !abreGab}
               reduzido={reduzido} saida={saidaDe(c)} posicao={posicaoDe(c)}

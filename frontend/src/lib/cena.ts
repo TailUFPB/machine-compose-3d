@@ -516,3 +516,15 @@ export function descricaoFluxo(f: Fluxo): string {
   return `Fluxo de ar: ${n(f.entrada, "entrada", "entradas")}${f.entrada ? " na frente" : ""}, ${n(f.saida, "saída", "saídas")}`
     + `${onde.length ? ` (${onde.join(" e ")})` : ""}, pressão ${f.pressao}.`;
 }
+
+/** Dica de montagem por tipo de peça, mostrada no passo a passo. */
+export const DICAS: Partial<Record<Tipo, string>> = {
+  cpu: "Alinhe o triângulo do processador com o do soquete e não force: ele entra sem pressão.",
+  cooler: "Use uma gota de pasta térmica do tamanho de uma ervilha no centro do processador e retire a película do cooler.",
+  memoria: "Encaixe até as duas travas clicarem; em dois pentes, use os slots alternados do manual da placa.",
+  armazenamento: "Parafuse o SSD M.2 no standoff e retire o plástico do adesivo térmico, se houver.",
+  placa_mae: "Confira os standoffs do gabinete e instale o painel traseiro (I/O shield) antes de encaixar a placa.",
+  fonte: "Passe os cabos pela abertura da bandeja antes de ligar: facilita o fluxo de ar e o cabeamento.",
+  gpu: "Ligue os cabos de energia da fonte até o clique e, depois, fixe a placa no parafuso do slot.",
+  gabinete: "Retire o vidro e os painéis laterais antes de começar.",
+};
