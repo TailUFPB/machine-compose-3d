@@ -6,7 +6,7 @@
 import { Edges, Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { BoxGeometry, type BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, EdgesGeometry, ExtrudeGeometry, type Group, Matrix4, MeshLambertMaterial, Path, Shape, TubeGeometry, Vector2, Vector3 } from "three";
+import { BoxGeometry, type BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, EdgesGeometry, ExtrudeGeometry, type Group, Matrix4, MeshStandardMaterial, Path, Shape, TubeGeometry, Vector2, Vector3 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Caixa, Vec3 } from "../lib/cena";
 import { type Forma, type Lote, type Modelo, type Sub, type Tom, lotes, progressoExplosao } from "../lib/peca";
@@ -17,6 +17,12 @@ const PULSO = new Color("#ff2a1a");   // conflito: tem prioridade sobre o destaq
 const COR: Record<Tom, string> = {
   lo: "#2c3d51", mid: "#3f5671", hi: "#7d93ad", lit: "#dfe8ef",
   pcb: "#2a5241", ouro: "#c8a04c", cobre: "#b9774a", metal: "#9aa7b6", escuro: "#16202b", vidro: "#9fc4e8", trilha: "#4f9273",
+};
+
+/** Acabamento por tom: metais e cobre refletem mais; o resto é fosco. Sem mapa de ambiente: metalness alto escureceria a peça. */
+const ACABAMENTO: Partial<Record<Tom, { metalness: number; roughness: number }>> = {
+  metal: { metalness: 0.45, roughness: 0.4 }, ouro: { metalness: 0.5, roughness: 0.35 }, cobre: { metalness: 0.5, roughness: 0.4 },
+  pcb: { metalness: 0.05, roughness: 0.6 }, lit: { metalness: 0.1, roughness: 0.35 },
 };
 
 /** Pá curva: crescente do cubo até a ponta, varrida para trás, no plano xz. */
@@ -97,7 +103,7 @@ export function malhaLote(l: Lote, comContorno = true) {
   return { geo: mergeGeometries(geos), contorno, faixas };
 }
 
-function Fan({ s, mat, spin, contorno }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]>; contorno: boolean }) {
+function Fan({ s, mat, spin, contorno }: { s: Sub & { forma: { tipo: "fan" } }; mat: (t: Tom) => MeshStandardMaterial; spin: React.RefObject<Group[]>; contorno: boolean }) {
   const emX = s.forma.eixo === "x";
   const r = s.forma.raio, t = emX ? s.tam[0] : s.tam[1], n = s.forma.pas;
   const pa = useMemo(() => geometriaPa(r), [r]);
@@ -133,14 +139,15 @@ const rotulo = (s: Sub) => s.fonte === "estimado" ? `${s.nome} (estimado)` : s.f
 const semRaio = () => null;
 
 /** `contorno` falso no modo Leve (peça fechada): sem as linhas de tinta, que custam desenho e montagem. */
-function Parte({ l, mat, spin, contorno }: { l: Lote; mat: (t: Tom) => MeshLambertMaterial; spin: React.RefObject<Group[]>; contorno: boolean }) {
+/** `faz`: projeta sombra. O gabinete não projeta, porque as paredes apagariam o interior. */
+function Parte({ l, mat, spin, contorno, faz }: { l: Lote; mat: (t: Tom) => MeshStandardMaterial; spin: React.RefObject<Group[]>; contorno: boolean; faz: boolean }) {
   const s = l.subs[0], fan = s.forma.tipo === "fan";
   const m = useMemo(() => (fan ? null : malhaLote(l, contorno)), [l, fan, contorno]);
   useEffect(() => () => m?.geo.dispose(), [m]);
   if (!m) return <Fan s={s as Sub & { forma: { tipo: "fan" } }} mat={mat} spin={spin} contorno={contorno} />;
   // o vidro não intercepta cliques nas peças de dentro
   return (
-    <mesh geometry={m.geo} material={mat(s.tom)} userData={{ faixas: m.faixas }} {...(s.tom === "vidro" ? { raycast: semRaio } : {})}>
+    <mesh geometry={m.geo} material={mat(s.tom)} userData={{ faixas: m.faixas }} castShadow={faz && s.tom !== "vidro"} receiveShadow {...(s.tom === "vidro" ? { raycast: semRaio } : {})}>
       {m.contorno.length > 0 && <Line segments points={m.contorno} color={TINTA} lineWidth={1} raycast={semRaio} />}
     </mesh>
   );
@@ -172,8 +179,8 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
   const grupos = useMemo(() => lotes(partesVisiveis(modelo.partes, enxuta, false)), [modelo, enxuta]);
   const contorno = !enxuta || c.tipo === "gabinete";
   const mats = useMemo(() => {
-    const m = {} as Record<Tom, MeshLambertMaterial>;
-    for (const t of Object.keys(COR) as Tom[]) m[t] = new MeshLambertMaterial({ color: COR[t], flatShading: true, emissive: "#ff2a1a", emissiveIntensity: 0 });
+    const m = {} as Record<Tom, MeshStandardMaterial>;
+    for (const t of Object.keys(COR) as Tom[]) m[t] = new MeshStandardMaterial({ color: COR[t], flatShading: true, emissive: "#ff2a1a", emissiveIntensity: 0, ...ACABAMENTO[t] });
     Object.assign(m.vidro, { transparent: true, opacity: 0.1, depthWrite: false });
     return m;
   }, []);
@@ -227,7 +234,7 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
       onPointerOut={(e) => { if (e.pointerType !== "touch") onHover(null); }}>
       {grupos.map((l, i) => (
         <group key={l.subs[0].id} ref={(o) => { partes.current[i] = o; }} position={l.pos}>
-          <Parte l={l} mat={mat} spin={spin} contorno={contorno} />
+          <Parte l={l} mat={mat} spin={spin} contorno={contorno} faz={c.tipo !== "gabinete"} />
         </group>
       ))}
     </group>
