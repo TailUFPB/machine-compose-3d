@@ -3,7 +3,7 @@
 // Conflito físico vira região vermelha com a medida do excesso; a peça em conflito pulsa.
 import { Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { type MutableRefObject, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Component, type MutableRefObject, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CatmullRomCurve3, Color, type Group, type InstancedMesh, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, Object3D, Quaternion, TOUCH, TubeGeometry, Vector3 } from "three";
 import type { Cena, Folga } from "@/lib/api";
 import { type Cabo, type Caixa, DICAS, DIRECAO, type EstadoPasso, type Regiao, type Regua, type SetaAr, type Vec3, VISTA_DA_FOLGA, type Vista, caminhosDoAr, descricaoCena, descricaoFluxo, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito, setasDoFluxo } from "@/lib/cena";
@@ -277,6 +277,17 @@ function DadosPeca({ c }: { c: Caixa }) {
   );
 }
 
+/** Sem WebGL (aceleração desligada, GPU bloqueada), o R3F lança ao criar o contexto: mostra um aviso em vez de derrubar a página. */
+class SemWebGL extends Component<{ children: ReactNode }, { falhou: boolean }> {
+  state = { falhou: false };
+  static getDerivedStateFromError() { return { falhou: true }; }
+  render() {
+    return this.state.falhou
+      ? <p className="vazio-bloco" role="alert" data-testid="sem-webgl">Não foi possível iniciar o 3D neste navegador (WebGL indisponível). Ative a aceleração de hardware, ou use a lista de peças e a descrição da montagem.</p>
+      : this.props.children;
+  }
+}
+
 interface Props {
   cena: Cena;
   /** `chave` da peça aberta. Com a prop, a página controla (painel e cena abrem a mesma peça); sem ela, estado local. */
@@ -539,7 +550,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         {mostraRegioes && regioes.map((r) => medida(r) && (
           <span key={r.conflitoId} ref={(el) => { etiquetas.current[r.conflitoId] = el; }} className="medida" data-testid="medida-cena">{medida(r)}</span>
         ))}
-        <Canvas shadows={!leve} dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
+        <SemWebGL><Canvas shadows={leve ? false : "percentage"} dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
           onPointerMissed={() => { limparToque(); if (!(previa && ultimoDedo.current)) setAberta(null); }}   // na prévia, o dedo no vazio só apaga o nome
           onCreated={({ gl }) => {   // a descrição textual fica ligada ao próprio canvas
             gl.domElement.setAttribute("role", "img");
@@ -574,7 +585,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           {regua && folga && <Regua3D r={regua} estado={folga.estado} etiquetas={etiquetasRegua} />}
           {setas.map((s, i) => <SetaVentoinha key={i} s={s} />)}
           {fluxoVisivel && <Particulas caminhos={caminhos} n={leve ? 24 : 60} parado={reduzido} />}
-        </Canvas>
+        </Canvas></SemWebGL>
       </div>
       <p id={idDescricao} className="sr" data-testid="descricao-cena">{descricao}</p>
       {alvo && <DadosPeca c={alvo} />}
