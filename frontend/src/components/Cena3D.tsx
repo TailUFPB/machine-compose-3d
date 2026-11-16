@@ -278,8 +278,11 @@ function DadosPeca({ c }: { c: Caixa }) {
 }
 
 /** Sem WebGL (aceleração desligada, GPU bloqueada), o R3F lança ao criar o contexto: mostra um aviso em vez de derrubar a página. */
+/** Testa o WebGL antes de montar o Canvas: sem contexto, o three registra console.error (e o overlay do Next o mostra como erro). */
+const temWebGL = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
+
 class SemWebGL extends Component<{ children: ReactNode }, { falhou: boolean }> {
-  state = { falhou: false };
+  state = { falhou: typeof document !== "undefined" && !temWebGL() };
   static getDerivedStateFromError() { return { falhou: true }; }
   render() {
     return this.state.falhou
