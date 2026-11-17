@@ -107,6 +107,12 @@ class Aplicar(BaseModel):
     itens: list[BuildItem] | None = None   # importação aceita
 
 
+class Troca(BaseModel):
+    """Troca uma peça da build (`de`) por outra do mesmo tipo (`para`)."""
+    de: str
+    para: str
+
+
 class Exportar(BaseModel):
     override: bool = False
     confirmacao: str = ""

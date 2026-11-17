@@ -152,7 +152,8 @@ def _passada_llm(nome: str, p: dict[str, Componente], ja: list[Achado]) -> list[
     return out
 
 
-def revisar(store: Store, itens: list[BuildItem], nomes: list[str] | None = None) -> list[Achado]:
+def revisar(store: Store, itens: list[BuildItem], nomes: list[str] | None = None, llm: bool = True) -> list[Achado]:
+    """`llm=False` pula a segunda passada (a prévia da cena só precisa dos achados determinísticos)."""
     p = _pecas(store, itens)
     out: list[Achado] = []
     for nome in nomes or list(REVISORES):
@@ -160,5 +161,5 @@ def revisar(store: Store, itens: list[BuildItem], nomes: list[str] | None = None
             achados = REVISORES[nome](store, p)
             for a in achados:
                 a.agente = nome
-            out += achados + _passada_llm(nome, p, achados)
+            out += achados + (_passada_llm(nome, p, achados) if llm else [])
     return out

@@ -6,12 +6,13 @@
 import { Edges, Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { BoxGeometry, type BufferGeometry, CatmullRomCurve3, CylinderGeometry, EdgesGeometry, ExtrudeGeometry, type Group, Matrix4, MeshLambertMaterial, Path, Shape, TubeGeometry, Vector2, Vector3 } from "three";
+import { BoxGeometry, type BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, EdgesGeometry, ExtrudeGeometry, type Group, Matrix4, MeshLambertMaterial, Path, Shape, TubeGeometry, Vector2, Vector3 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Caixa, Vec3 } from "../lib/cena";
 import { type Forma, type Lote, type Modelo, type Sub, type Tom, lotes, progressoExplosao } from "../lib/peca";
 
 const TINTA = "#0b131c", ZERO: Vec3 = [0, 0, 0];
+const PULSO = new Color("#ff2a1a");   // conflito: tem prioridade sobre o destaque
 const COR: Record<Tom, string> = {
   lo: "#2c3d51", mid: "#3f5671", hi: "#7d93ad", lit: "#dfe8ef",
   pcb: "#2a5241", ouro: "#c8a04c", cobre: "#b9774a", metal: "#9aa7b6", escuro: "#16202b", vidro: "#9fc4e8", trilha: "#4f9273",
@@ -154,11 +155,14 @@ interface Props {
   posicao: (t: number) => Vec3 | null;   // posição montada (tutorial incluso), em mm
   saida: number;                         // quanto a placa sai do gabinete em +Z quando aberta, em mm
   onClick: () => void; onHover: (n: string | null) => void;
+  destacada?: boolean;   // hover sincronizado com o painel ou candidata da prévia
+  corDestaque?: string;
   moveis?: (t: number) => string[] | undefined;   // prefixos de id das subpeças a que `encaixe` se aplica; ausente = todas
   encaixe?: number | ((t: number) => number);   // subpeças móveis (travas, alavanca, parafusos): 0 = fechadas (padrão), 1 = abertas
 }
 
-export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0, moveis }: Props) {
+export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, posicao, saida, onClick, onHover, encaixe = 0, moveis, destacada = false, corDestaque = "#66c0f4" }: Props) {
+  const destaque = useMemo(() => new Color(corDestaque), [corDestaque]);
   const maxOrdem = Math.max(...modelo.partes.map((p) => p.ordem));
   const grupos = useMemo(() => lotes(modelo.partes), [modelo]);
   const mats = useMemo(() => {
@@ -200,7 +204,8 @@ export default function Peca3D({ c, modelo, escala, aberto, oculta, reduzido, po
     });
     if (!reduzido) for (const f of spin.current) f.rotation.y += dt * (aberto ? 0.4 : 1.6);
     const pulso = c.conflito && !aberto ? 0.35 + 0.35 * Math.sin(agora * 4) : 0;
-    for (const m of Object.values(mats)) m.emissiveIntensity = pulso;
+    const brilho = pulso > 0 ? pulso : destacada ? 0.35 : 0;
+    for (const m of Object.values(mats)) { m.emissive.copy(pulso > 0 ? PULSO : destaque); m.emissiveIntensity = brilho; }
   });
 
   const passar = (e: Parameters<typeof nomeEm>[0] & { stopPropagation: () => void }) => { e.stopPropagation(); onHover(aberto ? `${c.nome} · ${nomeEm(e)}` : c.nome); };
