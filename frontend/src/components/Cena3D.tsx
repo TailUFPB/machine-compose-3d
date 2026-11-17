@@ -533,11 +533,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         </>
       )}
       {tutorial && total > 0 && (
-        <div className="passo" data-testid="passo-texto" aria-live="polite">
-          <progress value={passo + 1} max={total} aria-label={`Passo ${passo + 1} de ${total}`} />
-          <p style={{ margin: "6px 0 0" }}><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
-          {DICAS[cena.passos[passo]?.tipo] && <p className="dica-passo" data-testid="dica-passo">Dica: {DICAS[cena.passos[passo].tipo]}</p>}
-        </div>
+        <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
       )}
       <div className="cena" data-testid="cena" data-fluxo={fluxoVisivel ? "on" : "off"} data-ventoinhas={cena.fluxo ? `${cena.fluxo.entrada}:${cena.fluxo.saida}` : ""} data-qualidade={nivel} data-escolha={escolha} data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
         data-vista={vista} data-regua={regua ? folga!.id : ""}>
@@ -590,6 +586,12 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           {fluxoVisivel && <Particulas caminhos={caminhos} n={leve ? 24 : 60} parado={reduzido} />}
         </Canvas></SemWebGL>
       </div>
+      {tutorial && total > 0 && (
+        <div className="passo-extra">   {/* abaixo da cena: acima dela empurraria o canvas para baixo */}
+          <progress value={passo + 1} max={total} aria-label={`Passo ${passo + 1} de ${total}`} />
+          {DICAS[cena.passos[passo]?.tipo] && <p className="dica-passo" data-testid="dica-passo">Dica: {DICAS[cena.passos[passo].tipo]}</p>}
+        </div>
+      )}
       <p id={idDescricao} className="sr" data-testid="descricao-cena">{descricao}</p>
       {alvo && <DadosPeca c={alvo} />}
       <ul className="legenda" aria-label="Legenda">

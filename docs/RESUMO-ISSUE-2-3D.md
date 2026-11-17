@@ -21,7 +21,7 @@ Não inclui os PRs de outras frentes (#4-7 ideias, #10-11 e #15 preço/cache).
 - **#14 `feat/fluxo-ar`:** `backend/app/fluxo.py` (vagas de ventoinha, sentido entrada/saída, pressão, calor, recomendadas), revisor `fluxo_de_ar` com 4 achados não físicos, botão "Fluxo de ar" com setas e partículas, seção no painel.
 
 ### João Bosco, PR #16 `feat/3d-dicas-progresso`
-- Barra de progresso e dica por tipo de peça no passo a passo (`DICAS` em `frontend/src/lib/cena.ts`).
+- Barra de progresso e dica por tipo de peça no passo a passo (abaixo da cena, para não deslocar o canvas) (`DICAS` em `frontend/src/lib/cena.ts`).
 - Luz hemisférica e contraluz, sombras projetadas na qualidade Alta (modo PCF), acabamento brilhante em metais, aviso quando o WebGL está indisponível (sem derrubar a página).
 - Estado: 110 testes de frontend e 159 de backend passando, build ok.
 
