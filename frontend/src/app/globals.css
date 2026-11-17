@@ -302,3 +302,5 @@ legend { color: var(--label); }
 .painel-peca .folga.justa .dir, .painel-peca .folga.ajuste .dir { color: var(--warning); }
 .painel-peca .folga.nao_cabe .dir { color: var(--negative); }
 .painel-peca .folga.cabe .dir { color: var(--positive); }
+.passo progress { width: 100%; height: 6px; accent-color: var(--hue, #66c0f4); }
+.dica-passo { margin: 4px 0 0; color: var(--muted); font-size: 13px; }

@@ -3,10 +3,10 @@
 // Conflito físico vira região vermelha com a medida do excesso; a peça em conflito pulsa.
 import { Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { type MutableRefObject, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Component, type MutableRefObject, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CatmullRomCurve3, Color, type Group, type InstancedMesh, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, Object3D, Quaternion, TOUCH, TubeGeometry, Vector3 } from "three";
 import type { Cena, Folga } from "@/lib/api";
-import { type Cabo, type Caixa, DIRECAO, type EstadoPasso, type Regiao, type Regua, type SetaAr, type Vec3, VISTA_DA_FOLGA, type Vista, caminhosDoAr, descricaoCena, descricaoFluxo, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito, setasDoFluxo } from "@/lib/cena";
+import { type Cabo, type Caixa, DICAS, DIRECAO, type EstadoPasso, type Regiao, type Regua, type SetaAr, type Vec3, VISTA_DA_FOLGA, type Vista, caminhosDoAr, descricaoCena, descricaoFluxo, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito, setasDoFluxo } from "@/lib/cena";
 import { progressoExplosao } from "@/lib/peca";
 import { CARENCIA_S, type Escolha, type Nivel, desceAuto, guardarEscolha, lerEscolha, nivelInicial, rotuloQualidade } from "@/lib/qualidade";
 import Peca3D from "./Peca3D";
@@ -277,6 +277,20 @@ function DadosPeca({ c }: { c: Caixa }) {
   );
 }
 
+/** Sem WebGL (aceleração desligada, GPU bloqueada), o R3F lança ao criar o contexto: mostra um aviso em vez de derrubar a página. */
+/** Testa o WebGL antes de montar o Canvas: sem contexto, o three registra console.error (e o overlay do Next o mostra como erro). */
+const temWebGL = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
+
+class SemWebGL extends Component<{ children: ReactNode }, { falhou: boolean }> {
+  state = { falhou: typeof document !== "undefined" && !temWebGL() };
+  static getDerivedStateFromError() { return { falhou: true }; }
+  render() {
+    return this.state.falhou
+      ? <p className="vazio-bloco" role="alert" data-testid="sem-webgl">Não foi possível iniciar o 3D neste navegador (WebGL indisponível). Ative a aceleração de hardware, ou use a lista de peças e a descrição da montagem.</p>
+      : this.props.children;
+  }
+}
+
 interface Props {
   cena: Cena;
   /** `chave` da peça aberta. Com a prop, a página controla (painel e cena abrem a mesma peça); sem ela, estado local. */
@@ -519,7 +533,11 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         </>
       )}
       {tutorial && total > 0 && (
-        <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
+        <div className="passo" data-testid="passo-texto" aria-live="polite">
+          <progress value={passo + 1} max={total} aria-label={`Passo ${passo + 1} de ${total}`} />
+          <p style={{ margin: "6px 0 0" }}><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
+          {DICAS[cena.passos[passo]?.tipo] && <p className="dica-passo" data-testid="dica-passo">Dica: {DICAS[cena.passos[passo].tipo]}</p>}
+        </div>
       )}
       <div className="cena" data-testid="cena" data-fluxo={fluxoVisivel ? "on" : "off"} data-ventoinhas={cena.fluxo ? `${cena.fluxo.entrada}:${cena.fluxo.saida}` : ""} data-qualidade={nivel} data-escolha={escolha} data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
         data-vista={vista} data-regua={regua ? folga!.id : ""}>
@@ -535,15 +553,20 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         {mostraRegioes && regioes.map((r) => medida(r) && (
           <span key={r.conflitoId} ref={(el) => { etiquetas.current[r.conflitoId] = el; }} className="medida" data-testid="medida-cena">{medida(r)}</span>
         ))}
-        <Canvas dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
+        <SemWebGL><Canvas shadows={leve ? false : "percentage"} dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
           onPointerMissed={() => { limparToque(); if (!(previa && ultimoDedo.current)) setAberta(null); }}   // na prévia, o dedo no vazio só apaga o nome
           onCreated={({ gl }) => {   // a descrição textual fica ligada ao próprio canvas
             gl.domElement.setAttribute("role", "img");
             gl.domElement.setAttribute("aria-label", "Montagem 3D da build");
             gl.domElement.setAttribute("aria-describedby", idDescricao);
           }}>
-          <ambientLight intensity={0.9} />
-          <directionalLight position={[5, 8, 5]} intensity={1.2} />
+          <hemisphereLight args={["#dbe8ff", "#2a2f3a", 0.8]} />   {/* céu frio em cima, chão escuro embaixo: dá volume às faces */}
+          <directionalLight position={[5, 8, 5]} intensity={1.1} castShadow={!leve} shadow-mapSize={[1024, 1024]} shadow-bias={-0.0005}
+            shadow-camera-left={-7} shadow-camera-right={7} shadow-camera-top={7} shadow-camera-bottom={-7} shadow-camera-near={1} shadow-camera-far={25} />
+          {gab && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, (-gab.tam[1] / 2 - 2) * ESCALA, 0]} receiveShadow raycast={semRaio}>
+            <planeGeometry args={[40, 40]} /><shadowMaterial opacity={0.35} />
+          </mesh>}   {/* chão invisível: só recebe a sombra do gabinete */}
+          <directionalLight position={[-6, 3, -4]} intensity={0.45} />   {/* contraluz fraco: separa a silhueta do fundo */}
           {caixas.map((c) => c.modelo ? (
             <Peca3D key={c.chave} c={c} modelo={c.modelo} escala={ESCALA} aberto={alvo === c} oculta={aberto && alvo !== c && !abreGab}
               reduzido={reduzido} saida={saidaDe(c)} posicao={posicaoDe(c)}
@@ -565,7 +588,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           {regua && folga && <Regua3D r={regua} estado={folga.estado} etiquetas={etiquetasRegua} />}
           {setas.map((s, i) => <SetaVentoinha key={i} s={s} />)}
           {fluxoVisivel && <Particulas caminhos={caminhos} n={leve ? 24 : 60} parado={reduzido} />}
-        </Canvas>
+        </Canvas></SemWebGL>
       </div>
       <p id={idDescricao} className="sr" data-testid="descricao-cena">{descricao}</p>
       {alvo && <DadosPeca c={alvo} />}

@@ -387,3 +387,10 @@ describe("regioesDeConflito com folgas da ficha", () => {
     expect(regioesDeConflito(montarCena(c), c.conflitos, [])[0].excessoMm).toBe(54);
   });
 });
+
+describe("DICAS", () => {
+  it("todo passo de peça do tutorial tem dica", async () => {
+    const { DICAS } = await import("./cena");
+    for (const t of ["cpu", "cooler", "memoria", "placa_mae", "fonte", "gpu"] as const) expect(DICAS[t]).toBeTruthy();
+  });
+});
