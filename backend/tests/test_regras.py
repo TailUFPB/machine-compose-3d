@@ -67,7 +67,8 @@ def test_cooler_e_video_ausentes(store):
 def test_itens_faltantes_sao_sugestoes(store):
     achados = regras.avaliar(store, itens("r5-7600", "mb-b650m-a", "case-q300l"))
     sug = {a.id.split(":")[0] + ":" + a.id.split(":")[1] for a in achados if a.severidade == "sugestao"}
-    assert {"faltante:fans", "faltante:wifi", "faltante:so"} <= sug
+    assert {"faltante:wifi", "faltante:so"} <= sug
+    assert "faltante:fans" not in sug   # virou fluxo:poucas_fans (revisor de fluxo de ar)
     assert any(a.id == "faltam_pecas" and a.severidade == "atencao" for a in achados)
 
 

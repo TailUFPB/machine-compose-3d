@@ -66,6 +66,7 @@ export default function Pagina() {
   const [proposta, setProposta] = useState<Proposta | null>(null);
   const [aberta, setAberta] = useState<string | null>(null);       // peça aberta, comum à cena e ao painel
   const [folgaAtiva, setFolgaAtiva] = useState<Folga["id"] | null>(null);   // régua ligada na cena
+  const [fluxoLigado, setFluxoLigado] = useState(false);                         // setas e partículas do ar na cena
   const [destaque, setDestaque] = useState<string | null>(null);   // peça sob o mouse, na lista ou na cena
   // Prévia de troca: nunca grava; a última candidata pedida vence (respostas atrasadas são ignoradas)
   const [previa, setPrevia] = useState<{ de: string; para: string; cena: CenaPrevia } | null>(null);
@@ -121,6 +122,8 @@ export default function Pagina() {
   // a régua vale para a build montada: some ao abrir peça, entrar em prévia, trocar de build ou sair da aba
   useEffect(() => { if (aberta || previa || pedindo) setFolgaAtiva(null); }, [aberta, previa, pedindo]);
   useEffect(() => setFolgaAtiva(null), [build?.id, vista]);
+  useEffect(() => { if (aberta || previa || pedindo) setFluxoLigado(false); }, [aberta, previa, pedindo]);   // o fluxo vale para a build montada
+  useEffect(() => setFluxoLigado(false), [build?.id, vista]);
   const folga = cena?.folgas?.find((f) => f.id === folgaAtiva) ?? null;   // número sempre da cena atual
   useEffect(() => {   // Esc com régua ativa tira só a régua
     if (!folgaAtiva) return;
@@ -232,12 +235,13 @@ export default function Pagina() {
               {cena ? (
                 <>
                   <Cena3D key={build?.id} cena={previa?.cena ?? cena} aberta={aberta} onAberta={setAberta} destaque={destaque}
-                    onDestaque={setDestaque} previa={previa && { para: previa.para }} escNoPainel={!!(previa || pedindo || folgaAtiva)} folga={folga} />
+                    onDestaque={setDestaque} previa={previa && { para: previa.para }} escNoPainel={!!(previa || pedindo || folgaAtiva)} folga={folga}
+                    fluxoLigado={fluxoLigado} onFluxo={setFluxoLigado} />
                   <PainelPeca build={build} catalogo={catalogo} cena={cena} aberta={aberta} onAberta={setAberta}
                     destaque={destaque} onDestaque={setDestaque} onBuild={atualizar}
                     previa={previa} pedindo={pedindo} erroPrevia={erroPrevia}
                     onPrevia={pedirPrevia} onCancelarPrevia={cancelarPrevia} onAplicarTroca={aplicarTroca}
-                    folgaAtiva={folga ? folgaAtiva : null} onFolga={setFolgaAtiva} />
+                    folgaAtiva={folga ? folgaAtiva : null} onFolga={setFolgaAtiva} onFluxo={() => setFluxoLigado(true)} />
                 </>
               ) : <span className="carregando" />}
             </section>

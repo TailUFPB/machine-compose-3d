@@ -51,6 +51,14 @@ export interface Cena {
   conflitos: { id: string; itens: string[]; descricao: string; severidade: Severidade }[];
   passos: { tipo: Tipo; texto: string }[];
   folgas?: Folga[];
+  /** Ventoinhas do gabinete com sentido (`backend/app/fluxo.py`); `null` sem gabinete. */
+  fluxo?: Fluxo | null;
+}
+
+export interface Ventoinha { vaga: "frente" | "topo" | "traseira"; indice: number; sentido: "entrada" | "saida"; origem: "gabinete" | "pacote" | "radiador" }
+/** Fluxo de ar medido pela ficha. `calor_w` = TDP da CPU + GPU; `recomendadas` é estimativa (uma a cada 150 W, mínimo 2). */
+export interface Fluxo {
+  ventoinhas: Ventoinha[]; entrada: number; saida: number; pressao: "positiva" | "equilibrada" | "negativa"; calor_w: number; recomendadas: number;
 }
 
 /** Folga medida pela ficha (`backend/app/folgas.py`): `sobra_mm` negativo = passa do limite. */

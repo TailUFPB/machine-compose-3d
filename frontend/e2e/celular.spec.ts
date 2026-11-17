@@ -128,6 +128,7 @@ test.describe("celular", () => {
   test("dois dedos giram a cena em torno do alvo", async ({ page, request }) => {
     await abrirCena(page, await criarBuild(request));
     await page.getByTestId("vista-frente").click();
+    await cena(page).locator("canvas").scrollIntoViewIfNeeded();   // o gesto precisa cair dentro da janela
     await page.waitForTimeout(1500);
     const antes = await camera(page);
     const alvoAntes = await page.locator("canvas[data-alvo]").getAttribute("data-alvo");

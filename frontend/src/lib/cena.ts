@@ -1,7 +1,7 @@
 // Layout paramétrico da cena 3D: cada peça vira uma caixa dimensionada pela ficha técnica (mm).
 // Eixos: X = profundidade (frente -X, traseira +X), Y = altura, Z = largura (lado da placa-mãe em -Z).
 import { aioBlocoModelo, aioRadiadorModelo } from "./aio";
-import type { Cena, Folga, Tipo } from "./api";
+import type { Cena, Fluxo, Folga, Tipo, Ventoinha } from "./api";
 import { coolerModelo, cpuModelo } from "./cpu";
 import { discoModelo } from "./disco";
 import { fonteModelo, gabineteModelo } from "./gabinete";
@@ -150,11 +150,13 @@ export function montarCena(cena: Cena): Caixa[] {
   if (gabCaixa) {
     // o radiador substitui os fans do gabinete na face dele; a GPU tira as tampas dos slots que ocupa
     const g = caixas.find((c) => c.tipo === "gpu");
-    const ocultar = [...(aio ? [noTopo ? "fan-topo" : "fan-frontal"] : []),
+    // com o fluxo do backend, ele já tirou as ventoinhas do gabinete das vagas do radiador (e as moveu para as livres)
+    const fans = cena.fluxo?.ventoinhas;
+    const ocultar = [...(aio && !fans ? [noTopo ? "fan-topo" : "fan-frontal"] : []),
       ...gabM.partes.filter((s) => g && /^slot-\d$/.test(s.id) && Math.abs(s.pos[1] - g.pos[1]) < g.tam[1] / 2).map((s) => s.id)];
-    gabCaixa.modelo = gabineteModelo(gabCaixa.specs, [], ocultar);
+    gabCaixa.modelo = gabineteModelo(gabCaixa.specs, [], ocultar, fans);
     // os cabos definem onde a cobertura da fonte precisa de passa-cabo
-    gabCaixa.modelo = gabineteModelo(gabCaixa.specs, montarCabos(caixas).flatMap((c) => (c.passagem ? [c.passagem] : [])), ocultar);
+    gabCaixa.modelo = gabineteModelo(gabCaixa.specs, montarCabos(caixas).flatMap((c) => (c.passagem ? [c.passagem] : [])), ocultar, fans);
   }
   return caixas;
 }
@@ -471,4 +473,46 @@ export function reguaDe(folga: Folga, caixas: Caixa[]): Regua | null {
   inicio[eixo] = c.pos[eixo] - sentido * c.tam[eixo] / 2;   // GPU: traseira (+X); demais: face na placa-mãe (−Z)
   inicio[1] = c.pos[1] + c.tam[1] / 2 + ACIMA;
   return { folga: folga.id, eixo, inicio, sentido, peca_mm: folga.tamanho_mm, limite_mm: folga.limite_mm };
+}
+
+// ---- Fluxo de ar (docs/superpowers/specs/2026-11-14-fluxo-de-ar-design.md) ------------------------------------------
+
+/** Seta de uma ventoinha: na âncora da vaga, apontando no sentido do ar (para dentro na entrada, para fora na saída). */
+export interface SetaAr { pos: Vec3; dir: Vec3; sentido: Ventoinha["sentido"] }
+const NORMAL: Record<Ventoinha["vaga"], Vec3> = { frente: [-1, 0, 0], traseira: [1, 0, 0], topo: [0, 1, 0] };   // para fora do gabinete
+const ancoraDaVaga = (v: Ventoinha) => (v.vaga === "traseira" ? "fan_traseiro" : `fan_${v.vaga === "frente" ? "frontal" : "topo"}_${v.indice}`);
+
+export function setasDoFluxo(caixas: Caixa[], fluxo: Fluxo | null | undefined): SetaAr[] {
+  const g = caixas.find((c) => c.tipo === "gabinete");
+  if (!g?.modelo || !fluxo) return [];
+  const rad = caixas.find(ehRadiador);
+  return fluxo.ventoinhas.flatMap((v) => {
+    // as do radiador ficam sobre as ventoinhas do próprio radiador (centralizado na face, e no topo puxado para o vidro)
+    const fanRad = v.origem === "radiador" ? rad?.modelo?.partes.find((s) => s.id === `fan-${v.indice}`) : undefined;
+    const a = fanRad ? undefined : g.modelo!.ancoras[ancoraDaVaga(v)];
+    if (!fanRad && !a) return [];
+    const n = girar(NORMAL[v.vaga], g.rot);
+    return [{ pos: fanRad ? noMundo(rad!, fanRad.pos) : noMundo(g, a!), dir: (v.sentido === "entrada" ? n.map((x) => -x || 0) : n) as Vec3, sentido: v.sentido }];
+  });
+}
+
+/** Caminhos do ar: de cada entrada (ou das frestas da frente, sem entrada) até cada saída, passando pela GPU e pelo cooler. */
+export function caminhosDoAr(caixas: Caixa[], fluxo: Fluxo | null | undefined): Vec3[][] {
+  const g = caixas.find((c) => c.tipo === "gabinete");
+  if (!g || !fluxo) return [];
+  const setas = setasDoFluxo(caixas, fluxo);
+  const frente: Vec3 = [g.pos[0] - g.tam[0] / 2 + 20, g.pos[1], g.pos[2]];
+  const entradas = setas.filter((s) => s.sentido === "entrada").map((s) => s.pos);
+  const saidas = setas.filter((s) => s.sentido === "saida").map((s) => soma(s.pos, s.dir.map((x) => x * 40) as Vec3));
+  const meio = [caixas.find((c) => c.tipo === "gpu"), caixas.find((c) => c.tipo === "cooler" && !ehRadiador(c)) ?? caixas.find((c) => c.tipo === "cpu")]
+    .flatMap((c) => (c ? [c.pos] : []));
+  const fim = saidas.length ? saidas : [[g.pos[0] + g.tam[0] / 2 + 40, g.pos[1] + g.tam[1] / 4, g.pos[2]] as Vec3];   // sem saída: frestas de trás
+  return (entradas.length ? entradas : [frente]).flatMap((e) => fim.map((s) => [e, ...meio, s]));
+}
+
+export function descricaoFluxo(f: Fluxo): string {
+  const n = (k: number, um: string, varios: string) => (k === 0 ? `nenhuma ${um}` : `${k} ${k === 1 ? um : varios}`);
+  const onde = (["traseira", "topo"] as const).filter((v) => f.ventoinhas.some((x) => x.vaga === v && x.sentido === "saida"));
+  return `Fluxo de ar: ${n(f.entrada, "entrada", "entradas")}${f.entrada ? " na frente" : ""}, ${n(f.saida, "saída", "saídas")}`
+    + `${onde.length ? ` (${onde.join(" e ")})` : ""}, pressão ${f.pressao}.`;
 }

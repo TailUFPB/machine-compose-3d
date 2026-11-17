@@ -4,9 +4,9 @@
 import { Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type MutableRefObject, useEffect, useId, useMemo, useRef, useState } from "react";
-import { CatmullRomCurve3, type Group, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, TOUCH, TubeGeometry, Vector3 } from "three";
+import { CatmullRomCurve3, Color, type Group, type InstancedMesh, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, Object3D, Quaternion, TOUCH, TubeGeometry, Vector3 } from "three";
 import type { Cena, Folga } from "@/lib/api";
-import { type Cabo, type Caixa, DIRECAO, type EstadoPasso, type Regiao, type Regua, type Vec3, VISTA_DA_FOLGA, type Vista, descricaoCena, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito } from "@/lib/cena";
+import { type Cabo, type Caixa, DIRECAO, type EstadoPasso, type Regiao, type Regua, type SetaAr, type Vec3, VISTA_DA_FOLGA, type Vista, caminhosDoAr, descricaoCena, descricaoFluxo, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito, setasDoFluxo } from "@/lib/cena";
 import { progressoExplosao } from "@/lib/peca";
 import { CARENCIA_S, type Escolha, type Nivel, desceAuto, guardarEscolha, lerEscolha, nivelInicial, rotuloQualidade } from "@/lib/qualidade";
 import Peca3D from "./Peca3D";
@@ -136,6 +136,52 @@ function Medidor({ onAmostra }: { onAmostra: (qps: number) => void }) {
 /** Leva o alvo da órbita (e a distância da câmera) até o foco por ~1,2 s depois de cada troca; depois solta. `vez` refaz o mesmo foco.
  *  Com `direcao` (vista pronta), a câmera também vai para `alvo + direcao × distancia` e encaixa exata no fim.
  *  Arrastar com o mouse interrompe a animação: a câmera nunca puxa de volta enquanto a pessoa gira. */
+const COR_AR = { entrada: "#4aa3ff", saida: "#ff9a3c" };
+const CIMA = new Vector3(0, 1, 0);
+
+/** Seta de uma ventoinha (haste e ponta), por cima de tudo e sem interceptar clique ou toque. */
+function SetaVentoinha({ s }: { s: SetaAr }) {
+  const d = new Vector3(...s.dir).normalize();
+  const giro = new Quaternion().setFromUnitVectors(CIMA, d);
+  const centro = new Vector3(...mm(s.pos)).addScaledVector(d, 0.3);
+  return (
+    <group position={centro} quaternion={giro} renderOrder={12}>
+      <mesh raycast={semRaio} renderOrder={12}><cylinderGeometry args={[0.03, 0.03, 0.4, 8]} /><meshBasicMaterial color={COR_AR[s.sentido]} depthTest={false} transparent opacity={0.9} /></mesh>
+      <mesh raycast={semRaio} renderOrder={12} position={[0, 0.27, 0]}><coneGeometry args={[0.1, 0.18, 12]} /><meshBasicMaterial color={COR_AR[s.sentido]} depthTest={false} transparent opacity={0.9} /></mesh>
+    </group>
+  );
+}
+
+/** Partículas do ar andando pelos caminhos (frio na entrada, quente na saída); paradas com movimento reduzido. */
+function Particulas({ caminhos, n, parado }: { caminhos: Vec3[][]; n: number; parado: boolean }) {
+  const curvas = useMemo(() => caminhos.map((c) => new CatmullRomCurve3(c.map((p) => new Vector3(...mm(p))), false, "catmullrom", 0.3)), [caminhos]);
+  const ref = useRef<InstancedMesh>(null);
+  const tmp = useMemo(() => new Object3D(), []), cor = useMemo(() => new Color(), []);
+  const [frio, quente] = useMemo(() => [new Color(COR_AR.entrada), new Color(COR_AR.saida)], []);
+  const posicionar = (agora: number) => {
+    const m = ref.current;
+    if (!m || !curvas.length) return;
+    for (let i = 0; i < n; i++) {
+      const k = (i / n + agora * 0.12) % 1;
+      tmp.position.copy(curvas[i % curvas.length].getPointAt(k));
+      tmp.updateMatrix();
+      m.setMatrixAt(i, tmp.matrix);
+      m.setColorAt(i, cor.copy(frio).lerp(quente, k));
+    }
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  };
+  useEffect(() => { posicionar(0); }, [curvas, n]);
+  useFrame(({ clock }) => { if (!parado) posicionar(clock.elapsedTime); });
+  if (!n || !curvas.length) return null;
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, n]} raycast={semRaio} renderOrder={11}>
+      <sphereGeometry args={[0.035, 8, 6]} />
+      <meshBasicMaterial depthTest={false} transparent opacity={0.85} />
+    </instancedMesh>
+  );
+}
+
 /** O OrbitControls grava `touch-action: none` no elemento em que escuta (o contêiner de eventos do R3F) ao conectar:
  *  1 dedo precisa rolar a página; 2 dedos são da cena. */
 function RolaComUmDedo() {
@@ -245,9 +291,15 @@ interface Props {
   escNoPainel?: boolean;
   /** Folga com régua ativa (escolhida no painel): leva a câmera à vista dela e desenha a régua. */
   folga?: Folga | null;
+  /** Fluxo de ar ligado (setas e partículas). Com a prop, a página controla (o painel também liga); sem ela, estado local. */
+  fluxoLigado?: boolean;
+  onFluxo?: (ligado: boolean) => void;
 }
 
-export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = null, onDestaque, previa = null, escNoPainel = false, folga = null }: Props) {
+export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = null, onDestaque, previa = null, escNoPainel = false, folga = null, fluxoLigado: fluxoProp, onFluxo }: Props) {
+  const [fluxoLocal, setFluxoLocal] = useState(false);
+  const fluxoOn = fluxoProp !== undefined ? fluxoProp : fluxoLocal;
+  const setFluxo = (v: boolean) => { if (fluxoProp === undefined) setFluxoLocal(v); onFluxo?.(v); };
   const caixas = useMemo(() => montarCena(cena), [cena]);
   const cabos = useMemo(() => montarCabos(caixas), [caixas]);
   const regioes = useMemo(() => regioesDeConflito(caixas, cena.conflitos, cena.folgas), [caixas, cena]);
@@ -281,8 +333,9 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
   const descricao = useMemo(() => {
     const nome = (id: string) => cena.pecas.find((p) => p.id === id)?.nome ?? id;
     const daRegua = folga ? ` Régua: ${nome(folga.peca)} ${folga.tamanho_mm} mm, limite ${folga.limite_mm} mm, ${folga.sobra_mm < 0 ? `passa ${-folga.sobra_mm}` : `sobram ${folga.sobra_mm}`} mm.` : "";
-    return (previa ? "Prévia, não aplicada. " : "") + (vista !== "livre" ? `Vista ${NOME_VISTA[vista].toLowerCase()}. ` : "") + descricaoCena(cena, caixas, regioes) + daRegua;
-  }, [cena, caixas, regioes, previa, vista, folga]);
+    const doFluxo = fluxoOn && cena.fluxo ? ` ${descricaoFluxo(cena.fluxo)}` : "";
+    return (previa ? "Prévia, não aplicada. " : "") + (vista !== "livre" ? `Vista ${NOME_VISTA[vista].toLowerCase()}. ` : "") + descricaoCena(cena, caixas, regioes) + daRegua + doFluxo;
+  }, [cena, caixas, regioes, previa, vista, folga, fluxoOn]);
   const reduzido = useMemo(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const deToque = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   // Qualidade: escolha guardada no navegador; no Auto, o nível começa pelo tipo de ponteiro e só desce (nunca sobe sozinho)
@@ -381,10 +434,17 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
   const regua = folga && mostraRegioes && !previa ? reguaDe(folga, caixas) : null;
   const etiquetas = useRef<Record<string, HTMLElement | null>>({});
   useEffect(() => {   // Esc fecha a peça aberta; sem peça aberta, desfaz a build explodida
-    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape" && !previa && !escNoPainel) aberto ? setAberta(null) : setExplodida(false); };   // na prévia, Esc é do painel (cancela)
+    // na prévia, Esc é do painel (cancela); com o fluxo ligado, o primeiro Esc só desliga o fluxo
+    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape" && !previa && !escNoPainel) fluxoOn ? setFluxo(false) : aberto ? setAberta(null) : setExplodida(false); };
     addEventListener("keydown", tecla);
     return () => removeEventListener("keydown", tecla);
-  }, [aberto, previa, escNoPainel]);
+  }, [aberto, previa, escNoPainel, fluxoOn]);
+  // Ligar o fluxo (pelo botão ou pelo painel) monta a build; depois, abrir peça, explodir, passo a passo ou prévia desligam
+  useEffect(() => { if (fluxoOn) { setExplodida(false); setTutorial(false); setAberta(null); } }, [fluxoOn]);
+  useEffect(() => { if (fluxoOn && (aberto || explodida || tutorial || previa)) setFluxo(false); }, [aberto, explodida, tutorial, previa]);
+  const fluxoVisivel = fluxoOn && !aberto && !explodida && !tutorial && !previa;
+  const setas = useMemo(() => (fluxoVisivel ? setasDoFluxo(caixas, cena.fluxo) : []), [fluxoVisivel, caixas, cena.fluxo]);
+  const caminhos = useMemo(() => (fluxoVisivel ? caminhosDoAr(caixas, cena.fluxo) : []), [fluxoVisivel, caixas, cena.fluxo]);
   useEffect(() => { limparToque(); }, [cena, tutorial, explodida, passo, aberta]);   // o toque não sobrevive à cena mudar
   useEffect(() => {   // a prévia mostra a build montada: explodida e passo a passo escondem as regiões de conflito
     if (previa) { setExplodida(false); setTutorial(false); }
@@ -408,6 +468,11 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           {!tutorial && (
             <button className="btn" data-testid="explodir" aria-pressed={explodida} onClick={() => { setExplodida(!explodida); setAberta(null); setFocado(null); }}>
               Explodir build
+            </button>
+          )}
+          {!tutorial && cena.fluxo && (
+            <button className="btn" data-testid="fluxo-ar" aria-pressed={fluxoOn} onClick={() => { const v = !fluxoOn; if (v) { setExplodida(false); setAberta(null); } setFluxo(v); }}>
+              Fluxo de ar
             </button>
           )}
           {!tutorial && (
@@ -456,7 +521,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
       {tutorial && total > 0 && (
         <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
       )}
-      <div className="cena" data-testid="cena" data-qualidade={nivel} data-escolha={escolha} data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
+      <div className="cena" data-testid="cena" data-fluxo={fluxoVisivel ? "on" : "off"} data-ventoinhas={cena.fluxo ? `${cena.fluxo.entrada}:${cena.fluxo.saida}` : ""} data-qualidade={nivel} data-escolha={escolha} data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
         data-vista={vista} data-regua={regua ? folga!.id : ""}>
         {regua && folga && ([
           ["peca", `${ROTULO[cena.pecas.find((p) => p.id === folga.peca)?.tipo ?? "gpu"] ?? "peça"} ${folga.tamanho_mm} mm`, "medida regua"],
@@ -498,6 +563,8 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
           <RolaComUmDedo />
           <Foco alvo={foco} distancia={distancia} vez={`${focado?.vez ?? 0}:${direcao ? pedido?.vez ?? 0 : 0}`} direcao={direcao} />
           {regua && folga && <Regua3D r={regua} estado={folga.estado} etiquetas={etiquetasRegua} />}
+          {setas.map((s, i) => <SetaVentoinha key={i} s={s} />)}
+          {fluxoVisivel && <Particulas caminhos={caminhos} n={leve ? 24 : 60} parado={reduzido} />}
         </Canvas>
       </div>
       <p id={idDescricao} className="sr" data-testid="descricao-cena">{descricao}</p>

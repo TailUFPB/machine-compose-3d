@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { api, type Build, type Cena, type CenaPrevia, type Componente, type Folga, type ResultadoPreco } from "@/lib/api";
 import { brl, TIPOS } from "@/lib/formato";
-import { bloqueioTroca, diferencaConflitos, folgasQueMudam, linhasPainel, resumoFicha, textoFolga } from "@/lib/painel";
+import { bloqueioTroca, diferencaConflitos, fluxoQueMuda, folgasQueMudam, linhasFluxo, linhasPainel, resumoFicha, textoFolga } from "@/lib/painel";
 import { ErroBloco, OfertasPeca, useAcao } from "./Paineis";
 
 export interface PainelProps {
@@ -27,6 +27,8 @@ export interface PainelProps {
   /** Folga com régua ativa na cena; clicar de novo desliga. */
   folgaAtiva: Folga["id"] | null;
   onFolga: (id: Folga["id"] | null) => void;
+  /** Liga o fluxo de ar na cena (setas e partículas). */
+  onFluxo?: () => void;
 }
 
 const NOME_FOLGA: Record<Folga["id"], string> = { gpu: "GPU", cooler: "Cooler", memoria: "Memória", fonte: "Fonte" };
@@ -74,6 +76,21 @@ export default function PainelPeca(props: PainelProps) {
               </ul>
             </>
           )}
+          {cena?.fluxo && (() => {
+            const l = linhasFluxo(cena.fluxo);
+            return (
+              <>
+                <h3>Fluxo de ar</h3>
+                <ul className="lista folgas">
+                  <li data-testid="fluxo-painel" className={`folga ${l.estado}`} tabIndex={0} role="button" aria-label={`${l.balanco}. ${l.calor}. Mostrar o fluxo de ar na cena`}
+                    onClick={() => props.onFluxo?.()} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); props.onFluxo?.(); } }}>
+                    <span className="linha1">{l.balanco}</span>
+                    <span className="linha2">{l.calor} (estimativa)</span>
+                  </li>
+                </ul>
+              </>
+            );
+          })()}
         </>
       )}
     </section>
@@ -163,6 +180,7 @@ function Trocar({ build, cena, previa, pedindo, erroPrevia, onPrevia, onCancelar
           <p>Preço: {previa.cena.diferenca_preco == null ? "sem preço com fonte" : sinal(previa.cena.diferenca_preco)}</p>
           {dif && dif.novos.length > 0 && <p className="neg">Novos conflitos: {dif.novos.map((c) => c.descricao).join("; ")}</p>}
           {dif && dif.resolvidos.length > 0 && <p className="pos">Resolve: {dif.resolvidos.map((c) => c.descricao).join("; ")}</p>}
+          {fluxoQueMuda(cena?.fluxo, previa.cena.fluxo).map((t) => <p key={t}>{t}</p>)}
           {folgasQueMudam(cena?.folgas, previa.cena.folgas).map(({ id, antes, depois }) => (
             <p key={id}>{NOME_FOLGA[id]}: {antes ? textoFolga(antes) : "—"} → <span className={depois && depois.sobra_mm < 0 ? "neg" : ""}>{depois ? textoFolga(depois) : "—"}</span></p>
           ))}
