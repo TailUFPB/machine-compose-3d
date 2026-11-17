@@ -4,10 +4,11 @@
 import { Edges, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type MutableRefObject, useEffect, useId, useMemo, useRef, useState } from "react";
-import { CatmullRomCurve3, type Group, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, TubeGeometry, Vector3 } from "three";
+import { CatmullRomCurve3, type Group, type Mesh, MeshLambertMaterial, type MeshStandardMaterial, TOUCH, TubeGeometry, Vector3 } from "three";
 import type { Cena, Folga } from "@/lib/api";
 import { type Cabo, type Caixa, DIRECAO, type EstadoPasso, type Regiao, type Regua, type Vec3, VISTA_DA_FOLGA, type Vista, descricaoCena, envelope, reguaDe, estadoPasso, focoDaPrevia, montarCabos, montarCena, posicaoExplodida, regioesDeConflito } from "@/lib/cena";
 import { progressoExplosao } from "@/lib/peca";
+import { CARENCIA_S, type Escolha, type Nivel, desceAuto, guardarEscolha, lerEscolha, nivelInicial, rotuloQualidade } from "@/lib/qualidade";
 import Peca3D from "./Peca3D";
 
 const ESCALA = 1 / 100;   // mm -> unidades da cena
@@ -18,7 +19,18 @@ const mm = (v: Vec3) => v.map((x) => x * ESCALA) as Vec3;
 const rotDe = (c: Caixa) => (c as Caixa & { rot?: Vec3 }).rot;   // Euler XYZ em torno do centro, quando o layout girar a peça
 const semRaio = () => null;
 
-function Peca({ c, posicao, apagada, onHover }: { c: Caixa; posicao: (t: number) => Vec3 | null; apagada: boolean; onHover: (n: string | null) => void }) {
+/** Toque (dedo) num objeto que só mostra o nome: marca no pointerdown, avisa no clique e não deixa o toque passar adiante.
+ *  `ativo` falso (cabo apagado: o raio do three acerta objeto invisível) deixa o toque seguir para o que está atrás. */
+function useToque(onToque: () => void, ativo: () => boolean = () => true) {
+  const deDedo = useRef(false);
+  return {
+    onPointerDown: (e: { pointerType: string }) => { deDedo.current = e.pointerType === "touch"; },
+    onClick: (e: { stopPropagation: () => void }) => { if (deDedo.current && ativo()) { e.stopPropagation(); onToque(); } },
+  };
+}
+
+function Peca({ c, posicao, apagada, onHover, onToque }: { c: Caixa; posicao: (t: number) => Vec3 | null; apagada: boolean; onHover: (n: string | null) => void; onToque: () => void }) {
+  const toque = useToque(onToque);
   const ref = useRef<Mesh>(null);
   const gab = c.tipo === "gabinete";
   const transparente = gab || apagada;
@@ -31,8 +43,8 @@ function Peca({ c, posicao, apagada, onHover }: { c: Caixa; posicao: (t: number)
     if (c.conflito) (m.material as MeshStandardMaterial).emissiveIntensity = 0.5 + 0.5 * Math.sin(clock.elapsedTime * 4);
   });
   return (
-    <mesh ref={ref} position={mm(c.pos)} rotation={rotDe(c)}
-      onPointerOver={(e) => { if (!gab) { e.stopPropagation(); onHover(c.nome); } }} onPointerOut={() => onHover(null)}>
+    <mesh ref={ref} position={mm(c.pos)} rotation={rotDe(c)} {...toque}
+      onPointerOver={(e) => { if (!gab && e.pointerType !== "touch") { e.stopPropagation(); onHover(c.nome); } }} onPointerOut={(e) => { if (e.pointerType !== "touch") onHover(null); }}>
       <boxGeometry args={mm(c.tam)} />
       <meshStandardMaterial key={String(transparente)}   // trocar `transparent` exige material novo
         color={c.conflito ? NEGATIVA : c.cor} emissive={c.conflito ? "#ff2a1a" : "#000000"}
@@ -44,7 +56,7 @@ function Peca({ c, posicao, apagada, onHover }: { c: Caixa; posicao: (t: number)
 }
 
 /** Cabo (ou mangueira) como tubo sobre os pontos da rota, com um plugue em cada ponta; some e volta com um fade curto. */
-function Cabo3D({ c, visivel, reduzido, onHover }: { c: Cabo; visivel: (t: number) => boolean; reduzido: boolean; onHover: (n: string | null) => void }) {
+function Cabo3D({ c, visivel, reduzido, onHover, onToque }: { c: Cabo; visivel: (t: number) => boolean; reduzido: boolean; onHover: (n: string | null) => void; onToque: () => void }) {
   const geo = useMemo(() => {
     // a curva quase não arredonda, para os trechos ficarem retos
     const curva = new CatmullRomCurve3(c.pontos.map((p) => new Vector3(...mm(p))), false, "catmullrom", 0.08);
@@ -53,6 +65,7 @@ function Cabo3D({ c, visivel, reduzido, onHover }: { c: Cabo; visivel: (t: numbe
   const mat = useMemo(() => new MeshLambertMaterial({ color: c.tipo === "mangueira" ? "#141a22" : c.raio > 2 ? "#5d6f86" : "#c8a04c" }), [c]);
   useEffect(() => () => { geo.dispose(); mat.dispose(); }, [geo, mat]);   // o three não libera sozinho o que vai por prop
   const grupo = useRef<Group>(null);
+  const toque = useToque(onToque, () => mat.opacity >= 0.5);
   useFrame(({ clock }, dt) => {
     const alvo = visivel(clock.elapsedTime) ? 1 : 0;
     let op = reduzido ? alvo : mat.opacity + (alvo - mat.opacity) * (1 - Math.exp((-dt * 3) / FADE));
@@ -62,7 +75,8 @@ function Cabo3D({ c, visivel, reduzido, onHover }: { c: Cabo; visivel: (t: numbe
     if (grupo.current) grupo.current.visible = op > 0;
   });
   return (
-    <group ref={grupo} onPointerOver={(e) => { if (mat.opacity < 0.5) return; e.stopPropagation(); onHover(c.nome); }} onPointerOut={() => onHover(null)}>
+    <group ref={grupo} {...toque} onPointerOver={(e) => { if (mat.opacity < 0.5 || e.pointerType === "touch") return; e.stopPropagation(); onHover(c.nome); }}
+      onPointerOut={(e) => { if (e.pointerType !== "touch") onHover(null); }}>
       <mesh geometry={geo} material={mat} />
       {c.plugues?.map((p, i) => <mesh key={i} position={mm(p.pos)} material={mat}><boxGeometry args={mm(p.tam)} /></mesh>)}
     </group>
@@ -97,11 +111,41 @@ const ROTULO: Partial<Record<Caixa["tipo"], string>> = { gpu: "GPU", placa_mae: 
 const distanciaDe = (maior: number) => maior * ESCALA * 1.5 + 2.2;
 const DE_FORA = 4.5;   // distância mínima ao focar algo dentro do gabinete: a câmera fica do lado de fora do vidro
 
-/** Centro e maior lado do envelope de um conjunto de caixas (mm). */
+const NOME_QUALIDADE: Record<Escolha, string> = { auto: "Auto", alta: "Alta", leve: "Leve" };
+/** O Auto desceu para Leve nesta visita: vale para as próximas builds também (a cena remonta a cada build). */
+let desceuNaVisita = false;
+
+/** Amostra a taxa de quadros a cada 1 s, depois da carência; aba em segundo plano (sem quadros) não conta. */
+function Medidor({ onAmostra }: { onAmostra: (qps: number) => void }) {
+  const janela = useRef<{ t0: number; n: number } | null>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    if (t < CARENCIA_S) return;
+    const j = janela.current;
+    if (!j) { janela.current = { t0: t, n: 0 }; return; }
+    j.n++;
+    const dt = t - j.t0;
+    if (dt < 1) return;
+    if (dt < 2) onAmostra(j.n / dt);   // janela esticada = aba parada; descarta
+    janela.current = { t0: t, n: 0 };
+  });
+  return null;
+}
+
 /** Leva o alvo da órbita (e a distância da câmera) até o foco por ~1,2 s depois de cada troca; depois solta. `vez` refaz o mesmo foco. */
 /** Leva o alvo da órbita (e a distância da câmera) até o foco por ~1,2 s depois de cada troca; depois solta. `vez` refaz o mesmo foco.
  *  Com `direcao` (vista pronta), a câmera também vai para `alvo + direcao × distancia` e encaixa exata no fim.
  *  Arrastar com o mouse interrompe a animação: a câmera nunca puxa de volta enquanto a pessoa gira. */
+/** O OrbitControls grava `touch-action: none` no elemento em que escuta (o contêiner de eventos do R3F) ao conectar:
+ *  1 dedo precisa rolar a página; 2 dedos são da cena. */
+function RolaComUmDedo() {
+  const controls = useThree((s) => s.controls);
+  const alvo = useThree((s) => s.events.connected) as HTMLElement | undefined;
+  const tela = useThree((s) => s.gl.domElement);
+  useEffect(() => { for (const el of [alvo, tela]) if (el) el.style.touchAction = "pan-y"; }, [controls, alvo, tela]);
+  return null;
+}
+
 function Foco({ alvo, distancia, vez = 0, direcao }: { alvo: Vec3; distancia: number; vez?: number | string; direcao?: Vec3 }) {
   const controls = useThree((s) => s.controls) as unknown as { target: Vector3; update: () => void; addEventListener: (e: string, f: () => void) => void; removeEventListener: (e: string, f: () => void) => void } | null;
   const tela = useThree((s) => s.gl.domElement);
@@ -118,6 +162,8 @@ function Foco({ alvo, distancia, vez = 0, direcao }: { alvo: Vec3; distancia: nu
     if (!controls) return;
     const pos = camera.position.toArray().map((v) => v.toFixed(2)).join();   // onde a câmera está (teste de navegador)
     if (tela.dataset.camera !== pos) tela.dataset.camera = pos;
+    const alvoAgora = controls.target.toArray().map((v) => v.toFixed(2)).join();   // onde a câmera olha (teste de navegador)
+    if (tela.dataset.alvo !== alvoAgora) tela.dataset.alvo = alvoAgora;
     if (desde.current.chave !== chave) desde.current = { chave, t: clock.elapsedTime, fim: false };
     if (desde.current.fim) return;
     const acabou = clock.elapsedTime - desde.current.t > 1.2;
@@ -128,7 +174,6 @@ function Foco({ alvo, distancia, vez = 0, direcao }: { alvo: Vec3; distancia: nu
     camera.position.lerp(dir.add(controls.target), k);
     controls.update();
     if (acabou) desde.current.fim = true;
-    tela.dataset.alvo = controls.target.toArray().map((v) => v.toFixed(2)).join();   // onde a câmera olha (teste de navegador)
   });
   return null;
 }
@@ -215,6 +260,8 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
   const setAberta = (chave: string | null) => { if (abertaProp === undefined) setAbertaLocal(chave); onAberta?.(chave); };
   const [focado, setFocado] = useState<{ id: string; vez: number } | null>(null);   // conflito para onde a câmera foi
   const [hover, setHover] = useState<string | null>(null);
+  // Toque (dedo): o primeiro toque numa peça mostra o nome e acende; o segundo na mesma peça abre
+  const [toque, setToque] = useState<{ chave: string; nome: string; peca: string | null } | null>(null);
   // Vista pronta: `pedido` anima a câmera uma vez (vez); arrastar com o mouse volta a "livre" sem animar
   const [vista, setVista] = useState<Vista>("livre");
   const [pedido, setPedido] = useState<{ vista: Vista; vez: number } | null>(null);
@@ -237,6 +284,31 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
     return (previa ? "Prévia, não aplicada. " : "") + (vista !== "livre" ? `Vista ${NOME_VISTA[vista].toLowerCase()}. ` : "") + descricaoCena(cena, caixas, regioes) + daRegua;
   }, [cena, caixas, regioes, previa, vista, folga]);
   const reduzido = useMemo(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  const deToque = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
+  // Qualidade: escolha guardada no navegador; no Auto, o nível começa pelo tipo de ponteiro e só desce (nunca sobe sozinho)
+  const [escolha, setEscolha] = useState<Escolha>(lerEscolha);
+  const [nivel, setNivel] = useState<Nivel>(() => (escolha === "auto" && desceuNaVisita ? "leve" : nivelInicial(escolha, deToque)));
+  const amostras = useRef<number[]>([]);
+  const escolher = (e: Escolha) => {
+    setEscolha(e); guardarEscolha(e); amostras.current = [];
+    setNivel(e === "auto" && desceuNaVisita ? "leve" : nivelInicial(e, deToque));
+  };
+  const amostrar = (qps: number) => {
+    amostras.current = [...amostras.current.slice(-5), qps];
+    if (desceAuto(amostras.current)) { desceuNaVisita = true; setNivel("leve"); }
+  };
+  const leve = nivel === "leve";
+  const ultimoDedo = useRef(false);   // o último toque no canvas foi de dedo (o clique no vazio não traz o tipo em todo navegador)
+  const limparToque = () => { if (toque?.peca) onDestaque?.(null); setToque(null); };
+  /** Toque numa peça: com ela aberta, só o nome da subpeça; segundo toque na mesma abre (fora do passo a passo). */
+  const tocar = (c: Caixa) => (nome: string) => {
+    if (aberta === c.chave) { setToque({ chave: c.chave, nome, peca: null }); return; }
+    if (toque?.chave === c.chave && !tutorial && !previa) { limparToque(); setAberta(c.chave); return; }   // na prévia, abrir descartaria a prévia
+    const peca = c.tipo === "gabinete" ? null : c.id;
+    if (peca || toque?.peca) onDestaque?.(peca);
+    setToque({ chave: c.chave, nome, peca });
+  };
+  const tocarNome = (chave: string, nome: string) => () => { if (toque?.peca) onDestaque?.(null); setToque({ chave, nome, peca: null }); };
   const destaqueCor = useMemo(() => (typeof window !== "undefined" && getComputedStyle(document.documentElement).getPropertyValue("--hue").trim()) || "#66c0f4", []);
   /** Hover na cena: etiqueta com o nome e aviso ao painel de qual peça está sob o mouse. */
   const hoverDe = (c: Caixa) => (nome: string | null) => { setHover(nome); onDestaque?.(nome ? c.id : null); };
@@ -313,6 +385,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
     addEventListener("keydown", tecla);
     return () => removeEventListener("keydown", tecla);
   }, [aberto, previa, escNoPainel]);
+  useEffect(() => { limparToque(); }, [cena, tutorial, explodida, passo, aberta]);   // o toque não sobrevive à cena mudar
   useEffect(() => {   // a prévia mostra a build montada: explodida e passo a passo escondem as regiões de conflito
     if (previa) { setExplodida(false); setTutorial(false); }
   }, [previa?.para]);
@@ -351,9 +424,17 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
               <button className="btn" data-testid="proximo" onClick={() => setPasso(Math.min(total - 1, passo + 1))} disabled={passo >= total - 1}>Próximo</button>
             </>
           )}
+          <div className="vistas" role="group" aria-label="Qualidade">
+            <span aria-hidden>Qualidade</span>
+            {(["auto", "alta", "leve"] as const).map((q) => (
+              <button key={q} className="btn pequeno" data-testid={`qualidade-${q}`} aria-pressed={escolha === q} onClick={() => escolher(q)}>{NOME_QUALIDADE[q]}</button>
+            ))}
+            {escolha === "auto" && <span className="num">{rotuloQualidade(escolha, nivel)}</span>}
+          </div>
         </div>
         {cena.conflitos.length > 0 && <span className="pill neg">{cena.conflitos.length} {cena.conflitos.length === 1 ? "conflito" : "conflitos"} em vermelho</span>}
       </div>
+      {deToque && <p className="dica-toque" data-testid="dica-toque">Dois dedos giram e aproximam a cena.</p>}
       {!tutorial && modeladas.length > 0 && (
         <>
           <div className="cena-pecas" role="group" aria-label="Abrir peça em vista explodida">
@@ -375,7 +456,7 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
       {tutorial && total > 0 && (
         <p className="passo" data-testid="passo-texto" aria-live="polite"><strong>Passo {passo + 1} de {total}.</strong> {cena.passos[passo]?.texto}</p>
       )}
-      <div className="cena" data-testid="cena" data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
+      <div className="cena" data-testid="cena" data-qualidade={nivel} data-escolha={escolha} data-aberta={alvo?.chave ?? ""} data-destaque={destaque ?? ""} data-previa={previa?.para ?? ""}
         data-vista={vista} data-regua={regua ? folga!.id : ""}>
         {regua && folga && ([
           ["peca", `${ROTULO[cena.pecas.find((p) => p.id === folga.peca)?.tipo ?? "gpu"] ?? "peça"} ${folga.tamanho_mm} mm`, "medida regua"],
@@ -384,12 +465,13 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
         ] as const).map(([k, texto, classe]) => (
           <span key={k} ref={(el) => { etiquetasRegua.current[k] = el; }} className={classe} data-testid="regua-medida">{texto}</span>
         ))}
-        {hover && <span className="etiqueta">{hover}</span>}
+        {(hover ?? toque?.nome) && <span className="etiqueta">{hover ?? toque?.nome}</span>}
         {previa && <span className="selo-previa" data-testid="selo-previa">Prévia: não aplicada</span>}
         {mostraRegioes && regioes.map((r) => medida(r) && (
           <span key={r.conflitoId} ref={(el) => { etiquetas.current[r.conflitoId] = el; }} className="medida" data-testid="medida-cena">{medida(r)}</span>
         ))}
-        <Canvas camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerMissed={() => setAberta(null)}
+        <Canvas dpr={leve ? 1 : [1, 2]} camera={{ position: CAM_INICIAL.toArray(), fov: 45 }} onPointerDown={(e) => { ultimoDedo.current = e.pointerType === "touch"; }}
+          onPointerMissed={() => { limparToque(); if (!(previa && ultimoDedo.current)) setAberta(null); }}   // na prévia, o dedo no vazio só apaga o nome
           onCreated={({ gl }) => {   // a descrição textual fica ligada ao próprio canvas
             gl.domElement.setAttribute("role", "img");
             gl.domElement.setAttribute("aria-label", "Montagem 3D da build");
@@ -403,14 +485,17 @@ export default function Cena3D({ cena, aberta: abertaProp, onAberta, destaque = 
               encaixe={tutorial ? (t) => estadoEm(t).pecas[c.chave]?.encaixe ?? 0 : 0}
               moveis={tutorial ? (t) => estadoEm(t).pecas[c.chave]?.moveis : undefined}
               onClick={() => !tutorial && setAberta(alvo === c ? null : c.chave)} onHover={hoverDe(c)}
-              destacada={c.tipo !== "gabinete" && (destaque === c.id || previa?.para === c.id)} corDestaque={destaqueCor} />
+              destacada={c.tipo !== "gabinete" && (destaque === c.id || previa?.para === c.id || toque?.chave === c.chave)} corDestaque={destaqueCor} leve={leve}
+              onToque={tocar(c)} />
           ) : (
-            <Peca key={c.chave} c={c} posicao={posicaoDe(c)} apagada={aberto && !abreGab} onHover={hoverDe(c)} />
+            <Peca key={c.chave} c={c} posicao={posicaoDe(c)} apagada={aberto && !abreGab} onHover={hoverDe(c)} onToque={tocarNome(c.chave, c.nome)} />
           ))}
-          {cabos.map((c) => <Cabo3D key={c.id} c={c} visivel={caboVisivel(c)} reduzido={reduzido} onHover={setHover} />)}
+          {cabos.map((c) => <Cabo3D key={c.id} c={c} visivel={caboVisivel(c)} reduzido={reduzido} onHover={setHover} onToque={tocarNome(c.id, c.nome)} />)}
           {mostraRegioes && regioes.map((r) => <Regiao3D key={r.conflitoId} r={r} cor={negativa} etiqueta={() => etiquetas.current[r.conflitoId] ?? null} />)}
           {/* mexer com o mouse só marca Livre: mudar o pedido mudaria a chave do Foco e reiniciaria a animação (puxão) */}
-          <OrbitControls makeDefault onStart={() => setVista("livre")} />
+          {escolha === "auto" && !leve && <Medidor onAmostra={amostrar} />}
+          <OrbitControls makeDefault onStart={() => setVista("livre")} touches={{ ONE: undefined, TWO: TOUCH.DOLLY_ROTATE }} />
+          <RolaComUmDedo />
           <Foco alvo={foco} distancia={distancia} vez={`${focado?.vez ?? 0}:${direcao ? pedido?.vez ?? 0 : 0}`} direcao={direcao} />
           {regua && folga && <Regua3D r={regua} estado={folga.estado} etiquetas={etiquetasRegua} />}
         </Canvas>

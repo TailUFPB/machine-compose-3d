@@ -292,6 +292,7 @@ legend { color: var(--label); }
 .painel-peca .diferenca { display: grid; gap: 6px; padding: 12px; border-radius: var(--radius-control); background: var(--raised); }
 
 /* Vistas prontas e régua de folga */
+.dica-toque { margin: 0 0 8px; font-size: var(--fs-small); color: var(--muted); }
 .vistas { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--fs-small); color: var(--muted); }
 .cena .medida.regua { color: var(--text); border-color: var(--control); background: var(--surface); }
 .cena .medida.regua.cabe { color: var(--positive); border-color: var(--positive); }

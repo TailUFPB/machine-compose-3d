@@ -88,3 +88,9 @@ mostra quanto sobra (ou passa) da GPU no gabinete, do cooler na tampa, da memór
 gabinete, com os estados cabe, justa, ajuste e não cabe e os mesmos limites da revisão (`backend/app/folgas.py`).
 Clicar numa folga leva a câmera à vista da medida e desenha a régua; Esc tira a régua. Na prévia de troca, as folgas que
 mudam aparecem na diferença. Design em [docs/superpowers/specs/2026-11-14-vistas-folgas-design.md](docs/superpowers/specs/2026-11-14-vistas-folgas-design.md).
+
+**Qualidade: Auto, Alta, Leve** fica na mesma barra. Leve desenha com densidade de pixels 1 e tira pinos, contatos,
+trilhas e contornos das peças fechadas (a peça aberta mostra tudo). Auto começa Leve em tela de toque e desce para Leve
+se a cena ficar abaixo de 30 q/s; a escolha manual fica guardada no navegador. No toque, o primeiro toque numa peça mostra
+o nome e acende a linha no painel, o segundo abre; 1 dedo rola a página e 2 dedos giram e aproximam a cena. Design em
+[docs/superpowers/specs/2026-11-14-celular-design.md](docs/superpowers/specs/2026-11-14-celular-design.md).
