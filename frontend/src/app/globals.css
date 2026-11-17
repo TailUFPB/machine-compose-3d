@@ -290,3 +290,14 @@ legend { color: var(--label); }
 .painel-peca .candidata { text-align: left; white-space: normal; height: auto; min-height: 32px; }
 .painel-peca .candidata[aria-pressed="true"] { color: var(--hue); }
 .painel-peca .diferenca { display: grid; gap: 6px; padding: 12px; border-radius: var(--radius-control); background: var(--raised); }
+
+/* Vistas prontas e régua de folga */
+.vistas { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--fs-small); color: var(--muted); }
+.cena .medida.regua { color: var(--text); border-color: var(--control); background: var(--surface); }
+.cena .medida.regua.cabe { color: var(--positive); border-color: var(--positive); }
+.cena .medida.regua.justa, .cena .medida.regua.ajuste { color: var(--warning); border-color: var(--warning); background: var(--pill-warning-bg); }
+.cena .medida.regua.nao_cabe { color: var(--negative); border-color: var(--negative); background: var(--pill-negative-bg); }
+.painel-peca .folgas > li { cursor: pointer; }
+.painel-peca .folga.justa .dir, .painel-peca .folga.ajuste .dir { color: var(--warning); }
+.painel-peca .folga.nao_cabe .dir { color: var(--negative); }
+.painel-peca .folga.cabe .dir { color: var(--positive); }

@@ -1,6 +1,6 @@
 // Funções puras do painel ao lado da cena 3D: linhas da build, resumo da ficha, bloqueio de troca, diferença de
 // conflitos da prévia e a regra "a última prévia pedida vence".
-import type { Build, BuildItem, Cena, Componente, Tipo } from "./api";
+import type { Build, BuildItem, Cena, Componente, Folga, Tipo } from "./api";
 
 export interface LinhaPainel {
   id: string; tipo: Tipo; nome: string; preco: number | null; conflito: boolean; travada: boolean; jaTenho: boolean; quantidade: number;
@@ -62,4 +62,17 @@ export function diferencaConflitos(atual: Conflito[], previa: Conflito[], de: st
 export function ultimaVence(): { pedir(): number; vale(n: number): boolean } {
   let ultima = 0;
   return { pedir: () => ++ultima, vale: (n) => n === ultima };
+}
+
+/** "sobram 152 mm" ou "passa 10 mm". */
+export const textoFolga = (f: Folga): string => (f.sobra_mm < 0 ? `passa ${-f.sobra_mm} mm` : `sobram ${f.sobra_mm} mm`);
+
+/** Folgas que a prévia de troca muda (sobra ou estado diferente, ou que somem/aparecem), na ordem da build atual. */
+export function folgasQueMudam(atual: Folga[] | undefined, previa: Folga[] | undefined): { id: Folga["id"]; antes: Folga | null; depois: Folga | null }[] {
+  const a = new Map((atual ?? []).map((f) => [f.id, f])), d = new Map((previa ?? []).map((f) => [f.id, f]));
+  const ids = [...a.keys(), ...[...d.keys()].filter((k) => !a.has(k))];
+  return ids.flatMap((id) => {
+    const antes = a.get(id) ?? null, depois = d.get(id) ?? null;
+    return antes && depois && antes.sobra_mm === depois.sobra_mm && antes.estado === depois.estado ? [] : [{ id, antes, depois }];
+  });
 }

@@ -68,4 +68,4 @@ def test_previa_erros_iguais_ao_trocar(client):
 
 def test_cena_inalterada(client):
     bid = criar(client)
-    assert set(client.get(f"/builds/{bid}/cena").json()) == {"pecas", "conflitos", "passos"}
+    assert set(client.get(f"/builds/{bid}/cena").json()) == {"pecas", "conflitos", "passos", "folgas"}

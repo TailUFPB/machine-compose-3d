@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Cena } from "./api";
-import { type Cabo, type Caixa, type Vec3, descricaoCena, estadoPasso, focoDaPrevia, foraDoGabinete, montarCabos, montarCena, noMundo, posicaoExplodida, regioesDeConflito } from "./cena";
+import type { Cena, Folga } from "./api";
+import { type Cabo, type Caixa, type Vec3, VISTA_DA_FOLGA, descricaoCena, estadoPasso, focoDaPrevia, reguaDe, foraDoGabinete, montarCabos, montarCena, noMundo, posicaoExplodida, regioesDeConflito } from "./cena";
 
 type Peca = Cena["pecas"][number];
 const p = (id: string, tipo: Peca["tipo"], specs: Record<string, any>, nome = id): Peca => ({ id, tipo, nome, specs });
@@ -333,5 +333,57 @@ describe("focoDaPrevia", () => {
 
   it("candidata fora da cena devolve null", () => {
     expect(focoDaPrevia(caixas, regioes, c.conflitos, "nao-existe")).toBeNull();
+  });
+});
+
+describe("reguaDe", () => {
+  const caixas = montarCena(builds["ATX, cooler a ar, M.2 e discos de 2,5 e 3,5"]);
+  const folga = (id: Folga["id"], peca: string, tamanho: number, limite: number): Folga =>
+    ({ id, peca, limite_de: "case", tamanho_mm: tamanho, limite_mm: limite, sobra_mm: limite - tamanho, estado: "cabe", dica: null });
+
+  it("GPU: eixo X a partir da traseira, em direção à frente", () => {
+    const g = de(caixas, "gpu"), r = reguaDe(folga("gpu", "gpu", 290, 392), caixas)!;
+    expect(r).toMatchObject({ folga: "gpu", eixo: 0, sentido: -1, peca_mm: 290, limite_mm: 392 });
+    expect(r.inicio[0]).toBeCloseTo(g.pos[0] + g.tam[0] / 2, 5);
+    expect(r.inicio[1]).toBeCloseTo(g.pos[1] + g.tam[1] / 2 + 12, 5);   // acima da peça
+  });
+
+  it("memória e cooler: eixo Z a partir da face na placa-mãe", () => {
+    for (const [id, chave] of [["memoria", "ram"], ["cooler", "cooler"]] as const) {
+      const c = de(caixas, chave), r = reguaDe(folga(id, chave, 34, 40), caixas)!;
+      expect(r).toMatchObject({ eixo: 2, sentido: 1 });
+      expect(r.inicio[2]).toBeCloseTo(c.pos[2] - c.tam[2] / 2, 5);
+    }
+  });
+
+  it("peça fora da cena devolve null", () => {
+    expect(reguaDe(folga("gpu", "outra-gpu", 290, 392), caixas)).toBeNull();
+  });
+
+  it("cada folga tem a sua vista", () => {
+    expect(VISTA_DA_FOLGA).toEqual({ gpu: "lateral", cooler: "topo", memoria: "topo", fonte: "topo" });
+  });
+});
+
+describe("regioesDeConflito com folgas da ficha", () => {
+  const curto = p("case", "gabinete", { dimensoes: { c: 376, a: 292, l: 185 }, gpu_max_mm: 330 }, "Gabinete");
+  const c: Cena = { ...cena(curto, placa("ITX"), gpu(400, 2)),
+    conflitos: [{ id: "par:gpu_comprimento:case+gpu", itens: ["gpu", "case"], descricao: "A placa de vídeo não cabe", severidade: "bloqueante" }] };
+  const folga = (sobra: number): Folga => ({ id: "gpu", peca: "gpu", limite_de: "case", tamanho_mm: 400, limite_mm: 400 + sobra, sobra_mm: sobra, estado: sobra < 0 ? "nao_cabe" : "justa", dica: null });
+
+  it("o excesso da região é o da ficha, igual ao da régua", () => {
+    const [r] = regioesDeConflito(montarCena(c), c.conflitos, [folga(-70)]);
+    expect(r.excessoMm).toBe(70);
+    expect(r.texto).toBe("A placa de vídeo não cabe (passa 70 mm)");
+  });
+
+  it("se a ficha diz que cabe, a região não diz que passa", () => {
+    const [r] = regioesDeConflito(montarCena(c), c.conflitos, [folga(0)]);
+    expect(r.excessoMm).toBeNull();
+    expect(r.texto).toBe("A placa de vídeo não cabe");
+  });
+
+  it("sem folga da medida, vale a geometria como antes", () => {
+    expect(regioesDeConflito(montarCena(c), c.conflitos, [])[0].excessoMm).toBe(54);
   });
 });

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 
 from .. import llm
+from ..folgas import COOLER_JUSTA_MM, GPU_JUSTA_MM, RAM_AJUSTE_MM, limite_gpu, radiador_na_frente
 from ..modelos import Achado, BuildItem, Componente, Correcao
 from ..store import Store
 from ..tracing import span
@@ -57,28 +58,28 @@ def plataforma(store: Store, p: dict[str, Componente]) -> list[Achado]:
 def espaco_fisico(store: Store, p: dict[str, Componente]) -> list[Achado]:
     gpu, case, cooler, ram = p.get("gpu"), p.get("gabinete"), p.get("cooler"), p.get("memoria")
     out = []
-    if cooler and gpu and case and cooler.specs["refrigeracao"] == "aio" \
-            and gpu.specs["comprimento_mm"] <= case.specs["gpu_max_mm"] \
-            and gpu.specs["comprimento_mm"] > case.specs["gpu_max_com_radiador_frontal_mm"]:
+    # radiador na frente (sem posição na ficha vale a frente, como na cena); no topo ele não disputa espaço com a GPU
+    if gpu and case and radiador_na_frente(cooler) \
+            and limite_gpu(case, cooler) < gpu.specs["comprimento_mm"] <= case.specs["gpu_max_mm"]:
         out.append(_achado("espaco:radiador_gpu", "atencao", [cooler, gpu, case],
                            f"Com o radiador de {cooler.specs['radiador_mm']} mm na frente, sobram "
                            f"{case.specs['gpu_max_com_radiador_frontal_mm']} mm para a GPU de {gpu.specs['comprimento_mm']} mm. "
                            "Monte o radiador no topo.", fisico=True))
     if ram and cooler and cooler.specs["refrigeracao"] == "ar" and ram.specs["altura_mm"] > cooler.specs["ram_altura_max_mm"]:
         excesso = ram.specs["altura_mm"] - cooler.specs["ram_altura_max_mm"]
-        out.append(_achado("espaco:ram_cooler", "bloqueante" if excesso > 10 else "atencao", [ram, cooler],
+        out.append(_achado("espaco:ram_cooler", "bloqueante" if excesso > RAM_AJUSTE_MM else "atencao", [ram, cooler],
                            f"A memória de {ram.specs['altura_mm']} mm passa {excesso} mm da folga sob o {cooler.nome} "
-                           f"({cooler.specs['ram_altura_max_mm']} mm)" + (": a ventoinha precisa subir." if excesso <= 10 else "."),
+                           f"({cooler.specs['ram_altura_max_mm']} mm)" + (": a ventoinha precisa subir." if excesso <= RAM_AJUSTE_MM else "."),
                            _trocar(store, ram, lambda c: c.specs["ddr"] == ram.specs["ddr"]
                                    and c.specs["capacidade_gb"] == ram.specs["capacidade_gb"]
                                    and c.specs["altura_mm"] <= cooler.specs["ram_altura_max_mm"]), fisico=True))
-    if gpu and case and 0 <= case.specs["gpu_max_mm"] - gpu.specs["comprimento_mm"] < 15:
+    if gpu and case and 0 <= limite_gpu(case, cooler) - gpu.specs["comprimento_mm"] < GPU_JUSTA_MM:
         out.append(_achado("espaco:gpu_justa", "sugestao", [gpu, case],
-                           f"A GPU cabe com menos de 15 mm de sobra no {case.nome}: confira a passagem dos cabos de energia.",
+                           f"A GPU cabe com menos de {GPU_JUSTA_MM} mm de sobra no {case.nome}: confira a passagem dos cabos de energia.",
                            fisico=True))
-    if cooler and case and cooler.specs["refrigeracao"] == "ar" and 0 <= case.specs["cooler_max_mm"] - cooler.specs["altura_mm"] < 5:
+    if cooler and case and cooler.specs["refrigeracao"] == "ar" and 0 <= case.specs["cooler_max_mm"] - cooler.specs["altura_mm"] < COOLER_JUSTA_MM:
         out.append(_achado("espaco:cooler_justo", "sugestao", [cooler, case],
-                           f"O {cooler.nome} fica a menos de 5 mm da tampa lateral: pode encostar no vidro.", fisico=True))
+                           f"O {cooler.nome} fica a menos de {COOLER_JUSTA_MM} mm da tampa lateral: pode encostar no vidro.", fisico=True))
     return out
 
 

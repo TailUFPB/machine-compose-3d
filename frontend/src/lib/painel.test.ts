@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Build, BuildItem, Cena, Componente } from "./api";
-import { bloqueioTroca, diferencaConflitos, linhasPainel, resumoFicha, ultimaVence } from "./painel";
+import type { Build, BuildItem, Cena, Componente, Folga } from "./api";
+import { bloqueioTroca, diferencaConflitos, folgasQueMudam, linhasPainel, resumoFicha, textoFolga, ultimaVence } from "./painel";
 
 const item = (componente_id: string, extra: Partial<BuildItem> = {}): BuildItem => ({
   componente_id, quantidade: 1, travado: false, ja_tenho: false, origem: "usuario", justificativa: null, status_pesquisa: "ok", ...extra,
@@ -72,5 +72,27 @@ describe("ultimaVence", () => {
     const a = s.pedir(), b = s.pedir();
     expect(s.vale(a)).toBe(false);
     expect(s.vale(b)).toBe(true);
+  });
+});
+
+describe("folgas", () => {
+  const f = (id: Folga["id"], sobra: number, estado: Folga["estado"] = "cabe"): Folga =>
+    ({ id, peca: id, limite_de: "case", tamanho_mm: 100, limite_mm: 100 + sobra, sobra_mm: sobra, estado, dica: null });
+
+  it("textoFolga: sobra e excesso", () => {
+    expect(textoFolga(f("gpu", 152))).toBe("sobram 152 mm");
+    expect(textoFolga(f("gpu", -10, "nao_cabe"))).toBe("passa 10 mm");
+  });
+
+  it("folgasQueMudam: só as que mudam ou somem", () => {
+    const r = folgasQueMudam([f("gpu", 152), f("fonte", 35), f("cooler", 25)], [f("gpu", -10, "nao_cabe"), f("fonte", 35)]);
+    expect(r.map((x) => x.id)).toEqual(["gpu", "cooler"]);
+    expect(r[0].antes?.sobra_mm).toBe(152);
+    expect(r[0].depois?.sobra_mm).toBe(-10);
+    expect(r[1].depois).toBeNull();
+  });
+
+  it("sem folgas dos dois lados, nada muda", () => {
+    expect(folgasQueMudam(undefined, undefined)).toEqual([]);
   });
 });
