@@ -84,3 +84,13 @@ def test_fonte_atx_em_gabinete_sfx_sugere_sfx_suficiente(store):
     b = bloq(store, ["r5-7600", "mb-b650i-strix", "case-nr200p", "rtx-4070s", "psu-rm850e"])
     a = next(a for a in b if a.id.startswith("par:psu_form"))
     assert a.correcao_sugerida.para_id == "psu-sf750"
+
+
+def test_fonte_mais_larga_que_o_gabinete(store):
+    # orientação real: os 150 mm (c) da fonte ATX ficam na largura (l) do gabinete
+    assert store.componentes["psu-a750gl"].specs["dimensoes"]["c"] == 150
+    assert not any(a.id.startswith("par:psu_largura") for a in regras.avaliar(store, itens(*BASE_OK)))
+    store.componentes["case-lancool-216"].specs["dimensoes"]["l"] = 140   # cabia se os 140 mm (l) fossem a largura
+    a = next(a for a in bloq(store, BASE_OK) if a.id.startswith("par:psu_largura"))
+    assert a.fisico and "150 mm" in a.descricao and set(a.itens_envolvidos) == {"psu-a750gl", "case-lancool-216"}
+    assert "150 mm" in regras.motivo_incompativel(store, itens("case-lancool-216"), store.componentes["psu-rm850e"])

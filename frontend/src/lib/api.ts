@@ -46,7 +46,8 @@ export interface ResultadoPreco {
 }
 export interface Importacao { itens: BuildItem[]; nao_reconhecidas: string[]; avisos: string[] }
 export interface Cena {
-  pecas: { id: string; tipo: Tipo; nome: string; specs: Record<string, any> }[];
+  /** `origem`: URL da ficha para os campos de `specs` que vieram de extração (campo → URL). */
+  pecas: { id: string; tipo: Tipo; nome: string; specs: Record<string, any>; origem?: Record<string, string> }[];
   conflitos: { id: string; itens: string[]; descricao: string; severidade: Severidade }[];
   passos: { tipo: Tipo; texto: string }[];
 }

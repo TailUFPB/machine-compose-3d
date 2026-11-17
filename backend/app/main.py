@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import agente, exportar, importar, precos, resultado
+from . import agente, exportar, ficha, importar, precos, resultado
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
@@ -92,6 +92,14 @@ def componentes(tipo: str | None = None, build_id: str | None = None, todos: boo
         saida.append({**c.model_dump(), "nome": c.nome, "compativel": motivo is None, "motivo": motivo,
                       "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max, "confianca": r.confianca}})
     return saida
+
+
+@app.post("/componentes/{componente_id}/ficha", response_model=ficha.ResultadoFicha)
+def extrair_ficha(componente_id: str, store: Store = Depends(get_store)):
+    """Busca a ficha do fabricante e grava os campos geométricos plausíveis, cada um com a URL de origem."""
+    if store.get(componente_id) is None:
+        raise HTTPException(404, "componente não encontrado")
+    return ficha.extrair(store, componente_id)
 
 
 @app.post("/builds", response_model=Build)
@@ -279,6 +287,8 @@ def cena(build_id: str, store: Store = Depends(get_store)):
     tipos = {c.tipo for c in comps}
     conflitos = [{"id": a.id, "itens": a.itens_envolvidos, "descricao": a.descricao, "severidade": a.severidade}
                  for a in b.achados if a.status == "aberto" and (a.fisico or a.severidade == "bloqueante") and a.itens_envolvidos]
-    return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs} for c in comps if c.tipo != "extra"],
+    return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs,
+                       "origem": {campo: o["url"] for campo, o in c.specs_origem.items() if o.get("url")}}   # ausente = seed/estimado
+                      for c in comps if c.tipo != "extra"],
             "conflitos": conflitos,
             "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos]}
