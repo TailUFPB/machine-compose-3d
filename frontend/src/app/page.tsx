@@ -4,7 +4,9 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   Entrada, ErroBloco, Jogos, type Metas, Montagem, PropostaCard, ResultadoPainel, Revisao, useAcao, VisaoGeral,
 } from "@/components/Paineis";
-import { api, type Build, type Cena, type CenaPrevia, type Componente, ErroApi, type Folga, type Proposta } from "@/lib/api";
+import {
+  api, type Build, type Cena, type CenaPrevia, type Componente, type ConsumoSerper, ErroApi, type Folga, formatarConsumoSerper, type Proposta,
+} from "@/lib/api";
 import { ultimaVence } from "@/lib/painel";
 import { MODOS, rotuloBuild } from "@/lib/formato";
 
@@ -55,6 +57,7 @@ function useVista(): [string, (v: string) => void] {
 export default function Pagina() {
   const [vista, ir] = useVista();
   const [fonteDados, setFonteDados] = useState("");
+  const [consumoSerper, setConsumoSerper] = useState<ConsumoSerper | null>(null);
   const [jogos, setJogos] = useState<{ id: string; nome: string }[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, Componente>>({});
   const [builds, setBuilds] = useState<Build[]>([]);
@@ -80,6 +83,7 @@ export default function Pagina() {
     Promise.all([api.saude(), api.jogos(), api.catalogo(), api.builds()])
       .then(([s, j, c, b]) => {
         setFonteDados(s.dados);
+        setConsumoSerper(s.consumo_serper ?? null);
         setJogos(j.jogos);
         setCatalogo(Object.fromEntries(c.map((x) => [x.id, x])));
         setBuilds(b);
@@ -247,7 +251,12 @@ export default function Pagina() {
             </section>
           </>
         )}
-        {fonteDados && <p className="fonte-dados">{fonteDados}</p>}
+        {fonteDados && (
+          <p className="fonte-dados">
+            {fonteDados}
+            {consumoSerper && ` · ${formatarConsumoSerper(consumoSerper)}`}
+          </p>
+        )}
       </main>
     </>
   );

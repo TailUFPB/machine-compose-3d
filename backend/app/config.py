@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # Pesquisa de preço
     busca_provider: Literal["seed", "serper"] = "seed"   # serper = Google Shopping via serper.dev (preço real)
     serper_api_key: str = Field(default="", repr=False)
+    serper_limite_diario: int = 50
+    preaquecer_catalogo_startup: bool = False
     preco_cache_dias: int = 7
     lojas: str = "Kabum,Pichau,Terabyte,Mercado Livre,Amazon"
 

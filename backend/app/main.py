@@ -26,10 +26,12 @@ CONFIRMACAO_OVERRIDE = "EXPORTAR MESMO ASSIM"
 
 @asynccontextmanager
 async def _ciclo(_app: FastAPI):
-    if get_settings().preco_real:   # preço real: carrega o já coletado e busca o resto em segundo plano
+    s = get_settings()
+    if s.preco_real:   # preço real: carrega cache salvo; pré-busca completa é opcional e desligada por padrão
         store = get_store()
         precos.carregar_disco(store)
-        threading.Thread(target=precos.aquecer, args=(store,), daemon=True).start()
+        if s.preaquecer_catalogo_startup:
+            threading.Thread(target=precos.aquecer, args=(store,), daemon=True).start()
     yield
 
 
@@ -72,7 +74,13 @@ def _por_no_lugar(store: Store, b: Build, novo: BuildItem) -> None:
 def saude(store: Store = Depends(get_store)):
     s = get_settings()
     dados = store.aviso if not s.preco_real else "Preços reais do Google Shopping (serper.dev); FPS e fichas ainda do seed fictício."
-    return {"ok": True, "llm": s.llm_provider, "busca": "serper" if s.preco_real else "seed", "dados": dados}
+    return {"ok": True, "llm": s.llm_provider, "busca": "serper" if s.preco_real else "seed", "dados": dados,
+            "consumo_serper": precos.status_consumo(store)}
+
+
+@app.get("/precos/consumo")
+def consumo_precos(store: Store = Depends(get_store)):
+    return precos.status_consumo(store)
 
 
 @app.get("/jogos")
@@ -91,7 +99,7 @@ def componentes(tipo: str | None = None, build_id: str | None = None, todos: boo
         motivo = motivo_incompativel(store, b.itens, c) if b else None
         if motivo and not todos:
             continue
-        r = precos.pesquisar(store, c.id)
+        r = precos.consultar_cache(store, c.id)
         saida.append({**c.model_dump(), "nome": c.nome, "compativel": motivo is None, "motivo": motivo,
                       "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max,
                                 "qtd_lojas": r.qtd_lojas, "confianca": r.confianca}})

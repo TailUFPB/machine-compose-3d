@@ -21,8 +21,8 @@ def test_previa_nao_grava(client, store, monkeypatch):
     bid = criar(client)
     antes, propostas = store.builds[bid].model_dump(), dict(store.propostas)
 
-    def falha(tabela, *a, **k):   # pesquisar preço da candidata preenche o cache compartilhado ("ofertas"); a build, não
-        if tabela != "ofertas":
+    def falha(tabela, *a, **k):   # pesquisar preço da candidata preenche o cache compartilhado ("ofertas", "cache_anuncios"); a build, não
+        if tabela not in ("ofertas", "cache_anuncios"):
             raise AssertionError(f"a prévia não pode espelhar {tabela}")
     monkeypatch.setattr(store, "espelhar", falha)
     r = previa(client, bid, "rtx-4060-8g", "rx-7600")
