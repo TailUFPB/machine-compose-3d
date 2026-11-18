@@ -63,10 +63,29 @@ export function ehOfertaUnica(qtdLojas?: number | null): boolean {
 }
 export interface Importacao { itens: BuildItem[]; nao_reconhecidas: string[]; avisos: string[] }
 export interface Cena {
-  pecas: { id: string; tipo: Tipo; nome: string; specs: Record<string, any> }[];
+  /** `origem`: URL da ficha para os campos de `specs` que vieram de extração (campo → URL). */
+  pecas: { id: string; tipo: Tipo; nome: string; specs: Record<string, any>; origem?: Record<string, string> }[];
   conflitos: { id: string; itens: string[]; descricao: string; severidade: Severidade }[];
   passos: { tipo: Tipo; texto: string }[];
+  folgas?: Folga[];
+  /** Ventoinhas do gabinete com sentido (`backend/app/fluxo.py`); `null` sem gabinete. */
+  fluxo?: Fluxo | null;
 }
+
+export interface Ventoinha { vaga: "frente" | "topo" | "traseira"; indice: number; sentido: "entrada" | "saida"; origem: "gabinete" | "pacote" | "radiador" }
+/** Fluxo de ar medido pela ficha. `calor_w` = TDP da CPU + GPU; `recomendadas` é estimativa (uma a cada 150 W, mínimo 2). */
+export interface Fluxo {
+  ventoinhas: Ventoinha[]; entrada: number; saida: number; pressao: "positiva" | "equilibrada" | "negativa"; calor_w: number; recomendadas: number;
+}
+
+/** Folga medida pela ficha (`backend/app/folgas.py`): `sobra_mm` negativo = passa do limite. */
+export interface Folga {
+  id: "gpu" | "cooler" | "memoria" | "fonte"; peca: string; limite_de: string; tamanho_mm: number; limite_mm: number;
+  sobra_mm: number; estado: "cabe" | "justa" | "ajuste" | "nao_cabe"; dica: string | null;
+}
+
+/** Cena de uma troca ainda não aplicada (`POST /builds/{id}/cena/previa`). `diferenca_preco`: null sem preço com fonte. */
+export type CenaPrevia = Cena & { diferenca_preco: number | null };
 
 export class ErroApi extends Error {
   constructor(public status: number, public detalhe: any) {
@@ -103,7 +122,7 @@ export const api = {
     req<Build>(`/builds/${id}/itens/${cid}`, { method: "PATCH", body: JSON.stringify(dados) }),
   remover: (id: string, cid: string) => req<Build>(`/builds/${id}/itens/${cid}`, { method: "DELETE" }),
   trocarSemPreco: (id: string, deId: string, paraId: string) =>
-    post<Build>(`/builds/${id}/trocar`, { de_id: deId, para_id: paraId }),
+    post<Build>(`/builds/${id}/trocar`, { de: deId, para: paraId }),
   revisar: (id: string) => post<Build>(`/builds/${id}/revisar`),
   importar: (id: string, texto: string, ja_tenho: boolean) => post<Importacao>(`/builds/${id}/importar`, { texto, ja_tenho }),
   agente: (id: string) => post<Proposta>(`/builds/${id}/agente`),
@@ -115,6 +134,8 @@ export const api = {
     req<{ a: Estimativa[]; b: Estimativa[]; custo_a: number; custo_b: number }>(`/comparar?a=${a}&b=${b}&resolucao=${resolucao}`),
   resultado: (id: string) => req<Resultado>(`/builds/${id}/resultado`),
   cena: (id: string) => req<Cena>(`/builds/${id}/cena`),
+  trocar: (id: string, de: string, para: string) => post<Build>(`/builds/${id}/trocar`, { de, para }),
+  previa: (id: string, de: string, para: string) => post<CenaPrevia>(`/builds/${id}/cena/previa`, { de, para }),
   async exportar(id: string, override = false, confirmacao = ""): Promise<Blob> {
     const r = await fetch(`${API}/builds/${id}/exportar`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ override, confirmacao }),

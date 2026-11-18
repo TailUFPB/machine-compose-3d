@@ -18,6 +18,7 @@ class Componente(BaseModel):
     marca: str
     modelo: str
     specs: dict[str, Any]
+    specs_origem: dict[str, dict[str, str]] = Field(default_factory=dict)   # campo -> {url, coletado_em} (ficha extraída)
     fonte: str
 
     @property
@@ -105,6 +106,12 @@ class Aplicar(BaseModel):
     proposta: bool = False
     achado_id: str | None = None
     itens: list[BuildItem] | None = None   # importação aceita
+
+
+class Troca(BaseModel):
+    """Troca uma peça da build (`de`) por outra do mesmo tipo (`para`)."""
+    de: str
+    para: str
 
 
 class Exportar(BaseModel):

@@ -9,14 +9,16 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from . import agente, exportar, importar, precos, resultado
+from . import agente, exportar, ficha, fluxo, folgas, importar, precos, resultado
+from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
+from .compat import revisores
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
 from .fps import estimar_build
-from .modelos import Aplicar, Build, BuildCriar, BuildItem, Exportar, Importar, ItemAdicionar, ItemAtualizar
+from .modelos import Aplicar, Build, BuildCriar, BuildItem, Exportar, Importar, ItemAdicionar, ItemAtualizar, Troca
 from .store import Store, get_store
-from .tracing import trace
+from .tracing import sem_rastro, trace
 
 CONFIRMACAO_OVERRIDE = "EXPORTAR MESMO ASSIM"
 
@@ -104,6 +106,14 @@ def componentes(tipo: str | None = None, build_id: str | None = None, todos: boo
     return saida
 
 
+@app.post("/componentes/{componente_id}/ficha", response_model=ficha.ResultadoFicha)
+def extrair_ficha(componente_id: str, store: Store = Depends(get_store)):
+    """Busca a ficha do fabricante e grava os campos geométricos plausíveis, cada um com a URL de origem."""
+    if store.get(componente_id) is None:
+        raise HTTPException(404, "componente não encontrado")
+    return ficha.extrair(store, componente_id)
+
+
 @app.post("/builds", response_model=Build)
 def criar_build(dados: BuildCriar, store: Store = Depends(get_store)):
     return store.criar_build(dados)
@@ -137,6 +147,17 @@ def adicionar_item(build_id: str, item: ItemAdicionar, store: Store = Depends(ge
     return _revisar_e_salvar(store, b)
 
 
+@app.post("/builds/{build_id}/trocar", response_model=Build)
+def trocar(build_id: str, dados: Troca, store: Store = Depends(get_store)):
+    """Aplicar troca: substitui exatamente a peça `de` por `para` (qualquer tipo) numa única gravação."""
+    b = _build(store, build_id)
+    try:
+        b.itens = itens_trocados(store, b, dados.de, dados.para)
+    except TrocaInvalida as e:
+        raise HTTPException(e.status, e.mensagem)
+    return _revisar_e_salvar(store, b)
+
+
 @app.patch("/builds/{build_id}/itens/{componente_id}", response_model=Build)
 def atualizar_item(build_id: str, componente_id: str, dados: ItemAtualizar, store: Store = Depends(get_store)):
     b = _build(store, build_id)
@@ -152,22 +173,6 @@ def atualizar_item(build_id: str, componente_id: str, dados: ItemAtualizar, stor
 def remover_item(build_id: str, componente_id: str, store: Store = Depends(get_store)):
     b = _build(store, build_id)
     b.itens = [i for i in b.itens if i.componente_id != componente_id]
-    return _revisar_e_salvar(store, b)
-
-
-@app.post("/builds/{build_id}/trocar", response_model=Build)
-def trocar_item(build_id: str, dados: dict[str, str], store: Store = Depends(get_store)):
-    de_id, para_id = dados.get("de_id", ""), dados.get("para_id", "")
-    b = _build(store, build_id)
-    idx = next((k for k, i in enumerate(b.itens) if i.componente_id == de_id), None)
-    if idx is None:
-        raise HTTPException(404, "item de origem não está na build")
-    if para_id not in store.componentes:
-        raise HTTPException(404, "componente substituto não encontrado")
-    atual = b.itens[idx]
-    if atual.travado:
-        raise HTTPException(409, f"{store.componentes[de_id].nome} está travada: destrave para trocar")
-    b.itens[idx] = BuildItem(componente_id=para_id, quantidade=atual.quantidade, ja_tenho=atual.ja_tenho, origem="usuario")
     return _revisar_e_salvar(store, b)
 
 
@@ -314,10 +319,39 @@ PASSOS = [("cpu", "Encaixe a CPU no socket da placa-mãe (alinhe o triângulo)."
 def cena(build_id: str, store: Store = Depends(get_store)):
     """Dados para a cena 3D paramétrica: fichas, peças em conflito físico e passos do tutorial."""
     b = _build(store, build_id)
-    comps = [store.componentes[i.componente_id] for i in b.itens if i.componente_id in store.componentes]
+    return _dados_cena(store, b.itens, b.achados)
+
+
+@app.post("/builds/{build_id}/cena/previa")
+def cena_previa(build_id: str, dados: Troca, store: Store = Depends(get_store)):
+    """Prévia de troca: a cena da build com `para` no lugar de `de`, sem gravar nada (nem build, nem achados, nem
+    espelho), sem LLM e sem rastro. `diferenca_preco` é None quando uma das duas peças não tem preço com fonte."""
+    b = _build(store, build_id)
+    try:
+        itens = itens_trocados(store, b, dados.de, dados.para)
+    except TrocaInvalida as e:
+        raise HTTPException(e.status, e.mensagem)
+    with sem_rastro():   # inclui a pesquisa de preço da candidata (cache compartilhado; a build não é tocada)
+        achados = revisar_build(store, b, itens, llm=False)
+        sem_preco = precos.preco_ref(store, dados.de) is None or precos.preco_ref(store, dados.para) is None
+        diferenca = None if sem_preco else round(agente.custo(store, itens) - agente.custo(store, b.itens), 2)
+    return {**_dados_cena(store, itens, achados), "diferenca_preco": diferenca}
+
+
+def _dados_cena(store: Store, itens: list[BuildItem], achados: list) -> dict:
+    comps = [store.componentes[i.componente_id] for i in itens if i.componente_id in store.componentes]
     tipos = {c.tipo for c in comps}
     conflitos = [{"id": a.id, "itens": a.itens_envolvidos, "descricao": a.descricao, "severidade": a.severidade}
-                 for a in b.achados if a.status == "aberto" and (a.fisico or a.severidade == "bloqueante") and a.itens_envolvidos]
-    return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs} for c in comps if c.tipo != "extra"],
+                 for a in achados if a.status == "aberto" and (a.fisico or a.severidade == "bloqueante") and a.itens_envolvidos]
+    return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs,
+                       "origem": {campo: o["url"] for campo, o in c.specs_origem.items() if o.get("url")}}   # ausente = seed/estimado
+                      for c in comps if c.tipo != "extra"],
             "conflitos": conflitos,
-            "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos]}
+            "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos],
+            "folgas": [f.model_dump() for f in folgas.calcular(revisores._pecas(store, itens))],
+            "fluxo": (f.model_dump() if (f := fluxo.calcular(revisores._pecas(store, itens), _extras(store, itens))) else None)}
+
+
+def _extras(store: Store, itens: list[BuildItem]) -> list[tuple]:
+    """Extras da build com a quantidade (o pacote de ventoinhas conta `fans × quantidade`)."""
+    return [(c, i.quantidade) for i in itens if (c := store.componentes.get(i.componente_id)) and c.tipo == "extra"]
