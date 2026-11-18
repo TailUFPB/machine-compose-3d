@@ -4,11 +4,23 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 
 from .config import get_settings
 
 logger = logging.getLogger(__name__)
 _cliente = None
+_mudo: ContextVar[bool] = ContextVar("sem_rastro", default=False)
+
+
+@contextmanager
+def sem_rastro():
+    """Dentro deste bloco nenhum span vai para o Langfuse (usado pela prévia, que não registra nada)."""
+    token = _mudo.set(True)
+    try:
+        yield
+    finally:
+        _mudo.reset(token)
 AGENTES = ("revisor_", "propositor", "extrator_", "justificativas")   # viram observações do tipo agente
 
 
@@ -29,7 +41,7 @@ def _langfuse():
 
 @contextmanager
 def span(nome: str, **atributos):
-    lf = _langfuse()
+    lf = None if _mudo.get() else _langfuse()
     ctx = nullcontext()
     if lf:
         try:
