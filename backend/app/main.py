@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from . import agente, alertas, exportar, ficha, fluxo, folgas, importar, precos, resultado, upgrades
+from . import agente, alertas, compartilhar, exportar, ficha, fluxo, folgas, importar, precos, resultado, upgrades
 from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat import revisores
@@ -375,3 +375,22 @@ def ver_alertas(usuario: str = "demo", store: Store = Depends(get_store)):
 @app.get("/builds/{build_id}/upgrades", response_model=list[upgrades.Upgrade])
 def ver_upgrades(build_id: str, verba: float | None = None, store: Store = Depends(get_store)):
     return upgrades.sugerir(store, _build(store, build_id), verba)
+
+@app.get("/builds/{build_id}/texto")
+def texto_build(build_id: str, store: Store = Depends(get_store)):
+    return Response(compartilhar.markdown(store, _build(store, build_id)), media_type="text/markdown; charset=utf-8")
+
+
+@app.post("/builds/{build_id}/compartilhar")
+def compartilhar_build(build_id: str, store: Store = Depends(get_store)):
+    _build(store, build_id)
+    return {"token": compartilhar.criar_token(store, build_id)}
+
+
+@app.get("/compartilhado/{token}", response_model=Build)
+def ver_compartilhado(token: str, store: Store = Depends(get_store)):
+    """Só leitura: não existe rota de escrita por token."""
+    build_id = compartilhar.resolver(store, token)
+    if not build_id:
+        raise HTTPException(404, "link inválido")
+    return _build(store, build_id)
