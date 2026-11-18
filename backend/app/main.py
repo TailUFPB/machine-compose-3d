@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from . import agente, alertas, compartilhar, exportar, ficha, fluxo, folgas, importar, precos, resultado, upgrades
+from . import agente, alertas, compartilhar, energia, exportar, ficha, fluxo, folgas, importar, precos, resultado, upgrades
 from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat import revisores
@@ -394,3 +394,8 @@ def ver_compartilhado(token: str, store: Store = Depends(get_store)):
     if not build_id:
         raise HTTPException(404, "link inválido")
     return _build(store, build_id)
+
+@app.get("/builds/{build_id}/energia", response_model=energia.Energia)
+def ver_energia(build_id: str, horas_dia: float = Query(4, ge=0, le=24), tarifa: float | None = Query(None, gt=0, le=10),
+                store: Store = Depends(get_store)):
+    return energia.calcular(store, _build(store, build_id), horas_dia, tarifa)
