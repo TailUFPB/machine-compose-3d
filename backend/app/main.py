@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from . import agente, exportar, ficha, fluxo, folgas, importar, precos, resultado
+from . import agente, alertas, exportar, ficha, fluxo, folgas, importar, precos, resultado
 from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat import revisores
@@ -355,3 +355,19 @@ def _dados_cena(store: Store, itens: list[BuildItem], achados: list) -> dict:
 def _extras(store: Store, itens: list[BuildItem]) -> list[tuple]:
     """Extras da build com a quantidade (o pacote de ventoinhas conta `fans × quantidade`)."""
     return [(c, i.quantidade) for i in itens if (c := store.componentes.get(i.componente_id)) and c.tipo == "extra"]
+
+ALERTAS: dict[str, list[alertas.AlertaCriar]] = {}   # ponytail: em memória por usuário; tabela no Supabase quando houver login
+
+
+@app.post("/alertas", response_model=alertas.StatusAlerta)
+def criar_alerta(dados: alertas.AlertaCriar, usuario: str = "demo", store: Store = Depends(get_store)):
+    if dados.componente_id not in store.componentes:
+        raise HTTPException(404, "componente não encontrado")
+    lista = [a for a in ALERTAS.setdefault(usuario, []) if a.componente_id != dados.componente_id]
+    ALERTAS[usuario] = lista + [dados]
+    return alertas.status(store, dados)
+
+
+@app.get("/alertas", response_model=list[alertas.StatusAlerta])
+def ver_alertas(usuario: str = "demo", store: Store = Depends(get_store)):
+    return [alertas.status(store, a) for a in ALERTAS.get(usuario, [])]
