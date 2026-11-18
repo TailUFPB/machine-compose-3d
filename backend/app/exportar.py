@@ -26,7 +26,8 @@ def gerar_xlsx(build: Build, res: Resultado, fps: list[Estimativa], aviso_dados:
     ws.append(["Build", build.id])
     ws.append(["Modo", build.modo])
     ws.append(["Orçamento (R$)", build.orcamento])
-    ws.append(["Total (R$)", res.total])
+    ws.append(["Total referência (mediana, R$)", res.total])
+    ws.append(["Total menor preço (por conta e risco, R$)", res.total_minimo])
     ws.append(["Situação", "cabe no orçamento" if res.cabe else f"faltam {brl(-res.diferenca)}"])
     ws.append(["Frete", res.frete])
     ws.append(["Dados", aviso_dados])
@@ -36,10 +37,10 @@ def gerar_xlsx(build: Build, res: Resultado, fps: list[Estimativa], aviso_dados:
         ws.append(["Já possui", ", ".join(res.ja_tenho)])
 
     ws = wb.create_sheet("Plano por loja")
-    _cabecalho(ws, ["Loja", "Peça", "Qtd", "Preço unit. (R$)", "Subtotal (R$)", "Mín", "Mediana", "Máx", "Confiança", "Fonte (URL)"])
+    _cabecalho(ws, ["Loja", "Peça", "Qtd", "Preço unit. (R$)", "Subtotal (R$)", "Mín", "Mediana", "Máx", "Lojas", "Confiança", "Fonte (URL)"])
     for loja, linhas in res.lojas.items():
         for l in linhas:
-            ws.append([loja, l.nome, l.quantidade, l.preco_unit, l.subtotal, *l.faixa, l.confianca, l.url])
+            ws.append([loja, l.nome, l.quantidade, l.preco_unit, l.subtotal, *l.faixa, l.qtd_lojas, l.confianca, l.url])
         ws.append([f"Total {loja}", "", "", "", res.total_por_loja[loja]])
 
     ws = wb.create_sheet("Revisão")
