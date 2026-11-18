@@ -7,15 +7,18 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
-from . import agente, exportar, importar, precos, resultado, upgrades
+from . import agente, alertas, exportar, ficha, fluxo, folgas, importar, precos, resultado, upgrades
+from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
+from .compat import revisores
 from .compat.regras import TIPOS_UNICOS, motivo_incompativel
 from .config import get_settings
 from .fps import estimar_build
-from .modelos import Aplicar, Build, BuildCriar, BuildItem, Exportar, Importar, ItemAdicionar, ItemAtualizar
+from .modelos import Aplicar, Build, BuildCriar, BuildItem, Exportar, Importar, ItemAdicionar, ItemAtualizar, Troca
 from .store import Store, get_store
-from .tracing import trace
+from .tracing import sem_rastro, trace
 
 CONFIRMACAO_OVERRIDE = "EXPORTAR MESMO ASSIM"
 
@@ -23,10 +26,12 @@ CONFIRMACAO_OVERRIDE = "EXPORTAR MESMO ASSIM"
 
 @asynccontextmanager
 async def _ciclo(_app: FastAPI):
-    if get_settings().preco_real:   # preço real: carrega o já coletado e busca o resto em segundo plano
+    s = get_settings()
+    if s.preco_real:   # preço real: carrega cache salvo; pré-busca completa é opcional e desligada por padrão
         store = get_store()
         precos.carregar_disco(store)
-        threading.Thread(target=precos.aquecer, args=(store,), daemon=True).start()
+        if s.preaquecer_catalogo_startup:
+            threading.Thread(target=precos.aquecer, args=(store,), daemon=True).start()
     yield
 
 
@@ -69,7 +74,13 @@ def _por_no_lugar(store: Store, b: Build, novo: BuildItem) -> None:
 def saude(store: Store = Depends(get_store)):
     s = get_settings()
     dados = store.aviso if not s.preco_real else "Preços reais do Google Shopping (serper.dev); FPS e fichas ainda do seed fictício."
-    return {"ok": True, "llm": s.llm_provider, "busca": "serper" if s.preco_real else "seed", "dados": dados}
+    return {"ok": True, "llm": s.llm_provider, "busca": "serper" if s.preco_real else "seed", "dados": dados,
+            "consumo_serper": precos.status_consumo(store)}
+
+
+@app.get("/precos/consumo")
+def consumo_precos(store: Store = Depends(get_store)):
+    return precos.status_consumo(store)
 
 
 @app.get("/jogos")
@@ -88,10 +99,19 @@ def componentes(tipo: str | None = None, build_id: str | None = None, todos: boo
         motivo = motivo_incompativel(store, b.itens, c) if b else None
         if motivo and not todos:
             continue
-        r = precos.pesquisar(store, c.id)
+        r = precos.consultar_cache(store, c.id)
         saida.append({**c.model_dump(), "nome": c.nome, "compativel": motivo is None, "motivo": motivo,
-                      "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max, "confianca": r.confianca}})
+                      "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max,
+                                "qtd_lojas": r.qtd_lojas, "confianca": r.confianca}})
     return saida
+
+
+@app.post("/componentes/{componente_id}/ficha", response_model=ficha.ResultadoFicha)
+def extrair_ficha(componente_id: str, store: Store = Depends(get_store)):
+    """Busca a ficha do fabricante e grava os campos geométricos plausíveis, cada um com a URL de origem."""
+    if store.get(componente_id) is None:
+        raise HTTPException(404, "componente não encontrado")
+    return ficha.extrair(store, componente_id)
 
 
 @app.post("/builds", response_model=Build)
@@ -124,6 +144,17 @@ def adicionar_item(build_id: str, item: ItemAdicionar, store: Store = Depends(ge
     if item.componente_id not in store.componentes:
         raise HTTPException(404, "componente não encontrado")
     _por_no_lugar(store, b, BuildItem(**item.model_dump(), origem="usuario"))
+    return _revisar_e_salvar(store, b)
+
+
+@app.post("/builds/{build_id}/trocar", response_model=Build)
+def trocar(build_id: str, dados: Troca, store: Store = Depends(get_store)):
+    """Aplicar troca: substitui exatamente a peça `de` por `para` (qualquer tipo) numa única gravação."""
+    b = _build(store, build_id)
+    try:
+        b.itens = itens_trocados(store, b, dados.de, dados.para)
+    except TrocaInvalida as e:
+        raise HTTPException(e.status, e.mensagem)
     return _revisar_e_salvar(store, b)
 
 
@@ -241,6 +272,19 @@ def ver_resultado(build_id: str, store: Store = Depends(get_store)):
     return resultado.calcular(store, _build(store, build_id))
 
 
+@app.get("/ofertas/ir")
+def ir_para_oferta(componente_id: str, loja: str, url: str, store: Store = Depends(get_store)):
+    comp = store.get(componente_id)
+    if comp is None:
+        raise HTTPException(404, "Componente não encontrado")
+    r = precos.pesquisar(store, componente_id)
+    oferta = next((o for o in r.ofertas if o.loja == loja and o.url == url), None)
+    if oferta is None:
+        raise HTTPException(400, "Oferta não encontrada para redirecionamento")
+    destino = precos.resolver_link_loja(store, oferta.loja, oferta.titulo, oferta.url)
+    return RedirectResponse(destino, status_code=307)
+
+
 @app.post("/builds/{build_id}/exportar")
 def exportar_xlsx(build_id: str, dados: Exportar, store: Store = Depends(get_store)):
     b = _build(store, build_id)
@@ -275,14 +319,58 @@ PASSOS = [("cpu", "Encaixe a CPU no socket da placa-mãe (alinhe o triângulo)."
 def cena(build_id: str, store: Store = Depends(get_store)):
     """Dados para a cena 3D paramétrica: fichas, peças em conflito físico e passos do tutorial."""
     b = _build(store, build_id)
-    comps = [store.componentes[i.componente_id] for i in b.itens if i.componente_id in store.componentes]
+    return _dados_cena(store, b.itens, b.achados)
+
+
+@app.post("/builds/{build_id}/cena/previa")
+def cena_previa(build_id: str, dados: Troca, store: Store = Depends(get_store)):
+    """Prévia de troca: a cena da build com `para` no lugar de `de`, sem gravar nada (nem build, nem achados, nem
+    espelho), sem LLM e sem rastro. `diferenca_preco` é None quando uma das duas peças não tem preço com fonte."""
+    b = _build(store, build_id)
+    try:
+        itens = itens_trocados(store, b, dados.de, dados.para)
+    except TrocaInvalida as e:
+        raise HTTPException(e.status, e.mensagem)
+    with sem_rastro():   # inclui a pesquisa de preço da candidata (cache compartilhado; a build não é tocada)
+        achados = revisar_build(store, b, itens, llm=False)
+        sem_preco = precos.preco_ref(store, dados.de) is None or precos.preco_ref(store, dados.para) is None
+        diferenca = None if sem_preco else round(agente.custo(store, itens) - agente.custo(store, b.itens), 2)
+    return {**_dados_cena(store, itens, achados), "diferenca_preco": diferenca}
+
+
+def _dados_cena(store: Store, itens: list[BuildItem], achados: list) -> dict:
+    comps = [store.componentes[i.componente_id] for i in itens if i.componente_id in store.componentes]
     tipos = {c.tipo for c in comps}
     conflitos = [{"id": a.id, "itens": a.itens_envolvidos, "descricao": a.descricao, "severidade": a.severidade}
-                 for a in b.achados if a.status == "aberto" and (a.fisico or a.severidade == "bloqueante") and a.itens_envolvidos]
-    return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs} for c in comps if c.tipo != "extra"],
+                 for a in achados if a.status == "aberto" and (a.fisico or a.severidade == "bloqueante") and a.itens_envolvidos]
+    return {"pecas": [{"id": c.id, "tipo": c.tipo, "nome": c.nome, "specs": c.specs,
+                       "origem": {campo: o["url"] for campo, o in c.specs_origem.items() if o.get("url")}}   # ausente = seed/estimado
+                      for c in comps if c.tipo != "extra"],
             "conflitos": conflitos,
-            "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos]}
+            "passos": [{"tipo": t, "texto": txt} for t, txt in PASSOS if t in tipos],
+            "folgas": [f.model_dump() for f in folgas.calcular(revisores._pecas(store, itens))],
+            "fluxo": (f.model_dump() if (f := fluxo.calcular(revisores._pecas(store, itens), _extras(store, itens))) else None)}
 
+
+def _extras(store: Store, itens: list[BuildItem]) -> list[tuple]:
+    """Extras da build com a quantidade (o pacote de ventoinhas conta `fans × quantidade`)."""
+    return [(c, i.quantidade) for i in itens if (c := store.componentes.get(i.componente_id)) and c.tipo == "extra"]
+
+ALERTAS: dict[str, list[alertas.AlertaCriar]] = {}   # ponytail: em memória por usuário; tabela no Supabase quando houver login
+
+
+@app.post("/alertas", response_model=alertas.StatusAlerta)
+def criar_alerta(dados: alertas.AlertaCriar, usuario: str = "demo", store: Store = Depends(get_store)):
+    if dados.componente_id not in store.componentes:
+        raise HTTPException(404, "componente não encontrado")
+    lista = [a for a in ALERTAS.setdefault(usuario, []) if a.componente_id != dados.componente_id]
+    ALERTAS[usuario] = lista + [dados]
+    return alertas.status(store, dados)
+
+
+@app.get("/alertas", response_model=list[alertas.StatusAlerta])
+def ver_alertas(usuario: str = "demo", store: Store = Depends(get_store)):
+    return [alertas.status(store, a) for a in ALERTAS.get(usuario, [])]
 
 @app.get("/builds/{build_id}/upgrades", response_model=list[upgrades.Upgrade])
 def ver_upgrades(build_id: str, verba: float | None = None, store: Store = Depends(get_store)):
