@@ -7,7 +7,7 @@ const item = (componente_id: string, extra: Partial<BuildItem> = {}): BuildItem 
 });
 const comp = (id: string, tipo: Componente["tipo"], med: number | null): Componente => ({
   id, tipo, marca: "M", modelo: id, nome: `Nome ${id}`, specs: {}, fonte: "seed:demo", compativel: true, motivo: null,
-  preco: { min: med, med, max: med, confianca: "alta" },
+  preco: { min: med, med, max: med, qtd_lojas: 3, confianca: "alta" },
 });
 const conflito = (id: string, itens: string[]) => ({ id, itens, descricao: id, severidade: "bloqueante" as const });
 

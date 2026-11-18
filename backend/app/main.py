@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from . import agente, exportar, ficha, fluxo, folgas, importar, precos, resultado
 from .troca import TrocaInvalida, itens_trocados
@@ -92,7 +93,8 @@ def componentes(tipo: str | None = None, build_id: str | None = None, todos: boo
             continue
         r = precos.pesquisar(store, c.id)
         saida.append({**c.model_dump(), "nome": c.nome, "compativel": motivo is None, "motivo": motivo,
-                      "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max, "confianca": r.confianca}})
+                      "preco": {"min": r.preco_min, "med": r.preco_med, "max": r.preco_max,
+                                "qtd_lojas": r.qtd_lojas, "confianca": r.confianca}})
     return saida
 
 
@@ -260,6 +262,19 @@ def comparar(a: str, b: str, resolucao: str = Query("1080p"), store: Store = Dep
 @app.get("/builds/{build_id}/resultado", response_model=resultado.Resultado)
 def ver_resultado(build_id: str, store: Store = Depends(get_store)):
     return resultado.calcular(store, _build(store, build_id))
+
+
+@app.get("/ofertas/ir")
+def ir_para_oferta(componente_id: str, loja: str, url: str, store: Store = Depends(get_store)):
+    comp = store.get(componente_id)
+    if comp is None:
+        raise HTTPException(404, "Componente não encontrado")
+    r = precos.pesquisar(store, componente_id)
+    oferta = next((o for o in r.ofertas if o.loja == loja and o.url == url), None)
+    if oferta is None:
+        raise HTTPException(400, "Oferta não encontrada para redirecionamento")
+    destino = precos.resolver_link_loja(store, oferta.loja, oferta.titulo, oferta.url)
+    return RedirectResponse(destino, status_code=307)
 
 
 @app.post("/builds/{build_id}/exportar")
