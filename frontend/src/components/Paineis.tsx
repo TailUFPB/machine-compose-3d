@@ -750,8 +750,8 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
               {precos.map((p) => (
                 <tr key={p.componente_id}>
                   <td>{nome(p.componente_id)}{p.do_cache && <span className="sub">guardado{p.vencido && ", vencido"}</span>}</td>
-                  <td>{p.ofertas.length ? p.ofertas.map((o) => <div key={o.url + o.loja + o.preco}><a href={linkOferta(p.componente_id, o.loja, o.url)} target="_blank" rel="noreferrer">{o.loja}</a> <span className="num">{brl(o.preco)}</span></div>) : <span className="vazio">-</span>}</td>
-                  <td className="num">{p.preco_min != null ? `${brl(p.preco_min)} a ${brl(p.preco_max)}` : <span className="vazio">-</span>}<span className="sub">confiança {p.confianca ?? "-"}{ehOfertaUnica(p.qtd_lojas) && <>{" "}<SeloOfertaUnica qtdLojas={p.qtd_lojas} /></>}</span></td>
+                  <td><ListaOfertas p={p} /></td>
+                  <td className="num"><FaixaPreco p={p} /></td>
                   <td className="num">
                     {p.descartes.length ? (
                       <details>
@@ -769,6 +769,27 @@ export function ResultadoPainel({ build, catalogo, onBuild }: { build: Build; ca
       </section>
     </>
   );
+}
+
+/** Ofertas aceitas de uma peça, com loja, preço e link (a fonte). Usada na aba Compra e no painel da cena 3D. */
+export function ListaOfertas({ p }: { p: ResultadoPreco }) {
+  if (!p.ofertas.length) return <span className="vazio">-</span>;
+  return <>{p.ofertas.map((o) => <div key={o.url + o.loja + o.preco}><a href={linkOferta(p.componente_id, o.loja, o.url)} target="_blank" rel="noreferrer">{o.loja}</a> <span className="num">{brl(o.preco)}</span></div>)}</>;
+}
+
+/** Faixa mín–máx entre lojas e a confiança. */
+export function FaixaPreco({ p }: { p: ResultadoPreco }) {
+  return (
+    <span data-testid="faixa-preco">
+      {p.preco_min != null ? `${brl(p.preco_min)} a ${brl(p.preco_max!)}` : <span className="vazio">-</span>}
+      <span className="sub">confiança {p.confianca ?? "-"}{ehOfertaUnica(p.qtd_lojas) && <>{" "}<SeloOfertaUnica qtdLojas={p.qtd_lojas} /></>}</span>
+    </span>
+  );
+}
+
+/** Preço de uma peça no painel: faixa e ofertas, os mesmos componentes e dados da aba Compra. */
+export function OfertasPeca({ p }: { p: ResultadoPreco }) {
+  return <div className="ofertas-peca"><FaixaPreco p={p} /><ListaOfertas p={p} /></div>;
 }
 
 function mediaPorDia(h: { preco: number; coletado_em: string }[]): number[] {

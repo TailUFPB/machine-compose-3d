@@ -217,7 +217,7 @@ def test_trocar_item_atomico_e_equivalencia_por_categoria(client, store):
     assert alt_gpu["para_id"] != gpus[0].id  # não cai na GPU mais fraca só por ser a mais barata
 
     # Troca atômica preserva quantidade e substitui o item em uma única chamada
-    resp_troca = client.post(f"/builds/{bid}/trocar", json={"de_id": gpu_topo.id, "para_id": alt_gpu["para_id"]})
+    resp_troca = client.post(f"/builds/{bid}/trocar", json={"de": gpu_topo.id, "para": alt_gpu["para_id"]})
     assert resp_troca.status_code == 200
     ids = {i["componente_id"] for i in resp_troca.json()["itens"]}
     assert gpu_topo.id not in ids and alt_gpu["para_id"] in ids
