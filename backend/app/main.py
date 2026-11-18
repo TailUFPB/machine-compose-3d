@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from . import agente, alertas, exportar, ficha, fluxo, folgas, importar, precos, resultado
+from . import agente, alertas, exportar, ficha, fluxo, folgas, importar, precos, resultado, upgrades
 from .troca import TrocaInvalida, itens_trocados
 from .compat.consolidador import bloqueantes_abertos, revisar_build
 from .compat import revisores
@@ -371,3 +371,7 @@ def criar_alerta(dados: alertas.AlertaCriar, usuario: str = "demo", store: Store
 @app.get("/alertas", response_model=list[alertas.StatusAlerta])
 def ver_alertas(usuario: str = "demo", store: Store = Depends(get_store)):
     return [alertas.status(store, a) for a in ALERTAS.get(usuario, [])]
+
+@app.get("/builds/{build_id}/upgrades", response_model=list[upgrades.Upgrade])
+def ver_upgrades(build_id: str, verba: float | None = None, store: Store = Depends(get_store)):
+    return upgrades.sugerir(store, _build(store, build_id), verba)
