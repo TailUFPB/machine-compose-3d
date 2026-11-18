@@ -37,12 +37,14 @@ Sem `.env`, tudo roda offline: agentes e extração usam o caminho determinísti
 ```bash
 cd backend && uv run pytest        # regras, revisores, consolidador, preço, FPS, agente, importação, API
 cd frontend && pnpm test           # layout 3D, tutorial, demo de fluidez, formatação
+cd frontend && pnpm e2e            # cena 3D no navegador (Playwright): interação, conflitos e taxa de quadros
 ```
 
 ## Supabase
 
 ```bash
 psql "$DATABASE_URL" -f supabase/migrations/001_schema.sql
+psql "$DATABASE_URL" -f supabase/migrations/002_specs_origem.sql
 python3 scripts/gerar_seed.py && python3 scripts/gerar_seed_sql.py   # regenera seed.json e seed.sql
 psql "$DATABASE_URL" -f supabase/seed.sql
 ```
@@ -65,3 +67,37 @@ psql "$DATABASE_URL" -f supabase/seed.sql
   gargalo, 1% low, confiança e FPS por R$ 1.000.
 - **3D:** caixas dimensionadas pela ficha (`frontend/src/lib/cena.ts`), com peça em conflito pulsando em vermelho e
   tutorial passo a passo.
+
+## Cena 3D
+
+As peças são modelos procedurais gerados da ficha técnica; o método está em [docs/PECAS-3D.md](docs/PECAS-3D.md) e a
+spec em [docs/SPEC-VISTA-3D-COMPLETA.md](docs/SPEC-VISTA-3D-COMPLETA.md). Cada medida tem origem: norma, ficha ou
+estimado. `POST /componentes/{id}/ficha` busca a página do fabricante e extrai os campos geométricos da ficha (fans,
+portas, baias), cada um com URL e dentro de uma faixa plausível; sem `SERPER_API_KEY` ou sem LLM, não roda e o seed
+é usado como está. O que a extração grava fica em memória e se perde ao reiniciar a API.
+
+Ao lado da cena fica o painel **Peças da build**: passar o mouse numa linha acende a peça na cena (e vice-versa), e
+clicar abre o detalhe com a ficha, a faixa e as ofertas de preço (as mesmas da aba Compra) e o motivo da escolha.
+**Trocar** lista as peças do mesmo tipo; clicar numa candidata mostra a build com ela no lugar, com o selo
+"Prévia: não aplicada", os conflitos e a diferença de preço. `POST /builds/{id}/cena/previa` monta essa cena sem gravar
+nada (sem LLM e sem rastro no Langfuse); só **Aplicar troca** (`POST /builds/{id}/trocar`) altera a build. Esc ou
+Cancelar descartam a prévia. Design em [docs/superpowers/specs/2026-11-13-cena-paineis-design.md](docs/superpowers/specs/2026-11-13-cena-paineis-design.md).
+
+A barra da cena tem **Vista: Livre, Frente, Lateral, Topo**; arrastar com o mouse volta a Livre. No painel, **Folgas**
+mostra quanto sobra (ou passa) da GPU no gabinete, do cooler na tampa, da memória sob o cooler e da fonte na largura do
+gabinete, com os estados cabe, justa, ajuste e não cabe e os mesmos limites da revisão (`backend/app/folgas.py`).
+Clicar numa folga leva a câmera à vista da medida e desenha a régua; Esc tira a régua. Na prévia de troca, as folgas que
+mudam aparecem na diferença. Design em [docs/superpowers/specs/2026-11-14-vistas-folgas-design.md](docs/superpowers/specs/2026-11-14-vistas-folgas-design.md).
+
+**Qualidade: Auto, Alta, Leve** fica na mesma barra. Leve desenha com densidade de pixels 1 e tira pinos, contatos,
+trilhas e contornos das peças fechadas (a peça aberta mostra tudo). Auto começa Leve em tela de toque e desce para Leve
+se a cena ficar abaixo de 30 q/s; a escolha manual fica guardada no navegador. No toque, o primeiro toque numa peça mostra
+o nome e acende a linha no painel, o segundo abre; 1 dedo rola a página e 2 dedos giram e aproximam a cena. Design em
+[docs/superpowers/specs/2026-11-14-celular-design.md](docs/superpowers/specs/2026-11-14-celular-design.md).
+
+**Fluxo de ar** (`backend/app/fluxo.py`): cada ventoinha do gabinete, do pacote de ventoinhas e do radiador ocupa uma
+vaga com sentido (frente puxa ar para dentro; traseira e topo jogam para fora). O botão **Fluxo de ar** na barra da
+cena mostra setas em cada ventoinha e o ar passando pela GPU e pelo cooler; a seção **Fluxo de ar** do painel traz o
+balanço (pressão positiva, equilibrada ou negativa) e o calor estimado (TDP da CPU e da GPU, uma ventoinha a cada
+150 W). O revisor de fluxo de ar avisa sem entrada, pressão negativa, poucas ventoinhas e radiador na frente com GPU
+quente. Design em [docs/superpowers/specs/2026-11-14-fluxo-de-ar-design.md](docs/superpowers/specs/2026-11-14-fluxo-de-ar-design.md).

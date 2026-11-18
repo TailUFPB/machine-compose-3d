@@ -96,6 +96,15 @@ def avaliar(store: Store, itens: list[BuildItem]) -> list[Achado]:
         achados.append(_achado("par:psu_form", sev, [psu, case], txt,
                                _trocar(store, psu, lambda c: c.specs["form_factor"] in case.specs["psu_form_factor"]
                                        and c.specs["potencia_w"] >= consumo_estimado(comps) * margem), fisico=True))
+    # orientação real da torre: o comprimento da fonte (c, 150 mm na ATX) fica na largura (l) do gabinete e a
+    # profundidade dela (l) corre no comprimento. ponytail: compara com a largura externa (a ficha não traz a interna)
+    if psu and case and psu.specs["dimensoes"]["c"] > case.specs["dimensoes"]["l"]:
+        achados.append(_achado("par:psu_largura", "bloqueante", [psu, case],
+                               f"Fonte de {psu.specs['dimensoes']['c']} mm de largura não cabe no {case.nome} "
+                               f"({case.specs['dimensoes']['l']} mm de largura).",
+                               _trocar(store, psu, lambda c: c.specs["dimensoes"]["c"] <= case.specs["dimensoes"]["l"]
+                                       and c.specs["form_factor"] in case.specs["psu_form_factor"]
+                                       and c.specs["potencia_w"] >= consumo_estimado(comps) * margem), fisico=True))
     # comprimento da GPU x folga
     if gpu and case and gpu.specs["comprimento_mm"] > case.specs["gpu_max_mm"]:
         achados.append(_achado("par:gpu_comprimento", "bloqueante", [gpu, case],
@@ -144,10 +153,7 @@ def avaliar(store: Store, itens: list[BuildItem]) -> list[Achado]:
         achados.append(_achado("faltante:pasta", "sugestao", [cooler],
                                "Pasta térmica: confira se o cooler já traz; se for reaproveitar, compre uma.",
                                _adicionar(store, "extra", lambda c: c.specs["categoria"] == "pasta_termica")))
-    if case and case.specs["fans_inclusos"] < 2 and "ventoinhas" not in extras:
-        achados.append(_achado("faltante:fans", "sugestao", [case],
-                               f"O {case.nome} vem com {case.specs['fans_inclusos']} ventoinha(s): fluxo de ar fraco.",
-                               _adicionar(store, "extra", lambda c: c.specs["categoria"] == "ventoinhas")))
+    # ventoinhas: o revisor de fluxo de ar (fluxo:poucas_fans) conta gabinete, pacote e radiador contra o calor
     if mb and not mb.specs["wifi"] and "wifi" not in extras:
         achados.append(_achado("faltante:wifi", "sugestao", [mb], f"A {mb.nome} não tem Wi-Fi: use cabo ou um adaptador.",
                                _adicionar(store, "extra", lambda c: c.specs["categoria"] == "wifi")))
