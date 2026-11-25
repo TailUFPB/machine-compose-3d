@@ -167,6 +167,7 @@ def build_ja_tenho(build: Build) -> set[str]:
 
 def _justificar(store: Store, build: Build, comps: list[Componente], fixos: set[str]) -> dict[str, str]:
     res, alvo = build.objetivos.resolucao, build.objetivos.fps_alvo
+    referencia = f"alvo de {alvo} FPS em {res} nos jogos escolhidos" if build.objetivos.jogos else f"referência do catálogo de {alvo} FPS em {res}"
     texto = {}
     for c in comps:
         t = c.tipo
@@ -177,8 +178,8 @@ def _justificar(store: Store, build: Build, comps: list[Componente], fixos: set[
         base = f"{brl(preco)} (mediana com fonte)" if preco else "sem preço"
         sp = c.specs
         modelos = {
-            "cpu": lambda: f"Melhor custo para {alvo} FPS em {res} junto com a GPU; {sp['nucleos']} núcleos; {base}.",
-            "gpu": lambda: f"Escolhida pelo melhor custo para o alvo de {alvo} FPS em {res} nos jogos escolhidos; {sp['vram_gb']} GB; {base}.",
+            "cpu": lambda: f"Avaliado junto com a GPU com base na {referencia}; {sp['nucleos']} núcleos; {base}.",
+            "gpu": lambda: f"Avaliada junto com a CPU com base na {referencia}; {sp['vram_gb']} GB; {base}.",
             "placa_mae": lambda: f"Socket {sp['socket']}, {sp['memoria']}, BIOS compatível com a CPU; mais barata que atende; {base}.",
             "memoria": lambda: f"{sp['capacidade_gb']} GB {sp['ddr']}, na QVL da placa quando possível; {base}.",
             "armazenamento": lambda: f"NVMe de {sp['capacidade_gb'] // 1000} TB: carga rápida de jogos; {base}.",

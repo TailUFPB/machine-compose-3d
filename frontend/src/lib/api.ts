@@ -110,8 +110,8 @@ export const api = {
   jogos: () => req<{ jogos: { id: string; nome: string }[]; resolucoes: string[]; preset: string }>("/jogos"),
   builds: () => req<Build[]>("/builds"),
   build: (id: string) => req<Build>(`/builds/${id}`),
-  criar: (dados: Pick<Build, "modo" | "orcamento" | "cep" | "objetivos">) => post<Build>("/builds", dados),
-  atualizar: (id: string, dados: Pick<Build, "modo" | "orcamento" | "cep" | "objetivos">) =>
+  criar: (dados: Pick<Build, "modo" | "orcamento" | "cep"> & Partial<Pick<Build, "objetivos">>) => post<Build>("/builds", dados),
+  atualizar: (id: string, dados: Partial<Pick<Build, "modo" | "orcamento" | "cep" | "objetivos">>) =>
     req<Build>(`/builds/${id}`, { method: "PATCH", body: JSON.stringify(dados) }),
   componentes: (tipo: Tipo, buildId: string, todos: boolean) =>
     req<Componente[]>(`/componentes?tipo=${tipo}&build_id=${buildId}&todos=${todos}`),

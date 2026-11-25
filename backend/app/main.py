@@ -132,9 +132,11 @@ def ver_build(build_id: str, store: Store = Depends(get_store)):
 @app.patch("/builds/{build_id}", response_model=Build)
 def atualizar_build(build_id: str, dados: BuildCriar, store: Store = Depends(get_store)):
     b = _build(store, build_id)
-    for k, v in dados.model_dump().items():
-        setattr(b, k, v)
-    b.objetivos = dados.objetivos
+    objetivos_anteriores = b.objetivos
+    for campo in dados.model_fields_set:
+        setattr(b, campo, getattr(dados, campo))
+    if b.objetivos != objetivos_anteriores:
+        store.propostas.pop(b.id, None)
     return _revisar_e_salvar(store, b)
 
 
@@ -190,7 +192,10 @@ def importar_texto(build_id: str, dados: Importar, store: Store = Depends(get_st
 @app.post("/builds/{build_id}/agente")
 def rodar_agente(build_id: str, store: Store = Depends(get_store)):
     b = _build(store, build_id)
-    p = agente.propor(store, b)
+    entrada = b.model_copy()
+    p = agente.propor(store, entrada)
+    if entrada.objetivos != b.objetivos:
+        raise HTTPException(409, "As metas de jogos mudaram. Rode o agente novamente.")
     store.propostas[b.id] = p
     return p
 
@@ -251,8 +256,11 @@ def precos_build(build_id: str, store: Store = Depends(get_store)):
 @app.get("/builds/{build_id}/fps")
 def fps_build(build_id: str, resolucao: str | None = None, store: Store = Depends(get_store)):
     b = _build(store, build_id)
-    total = agente.custo(store, b.itens) or None
-    es = estimar_build(store, [i.componente_id for i in b.itens], b.objetivos.jogos, resolucao or b.objetivos.resolucao, total)
+    jogos = b.objetivos.jogos
+    es = []
+    if jogos:
+        total = agente.custo(store, b.itens) or None
+        es = estimar_build(store, [i.componente_id for i in b.itens], jogos, resolucao or b.objetivos.resolucao, total)
     store.espelhar("estimativas", [{"build_id": b.id, "jogo": e.jogo, "resolucao": e.resolucao, "preset": e.preset,
                                     "fps_min": e.fps_min, "fps_med": e.fps_med, "fps_max": e.fps_max,
                                     "confianca": e.confianca, "tipo": e.tipo} for e in es], substituir=("build_id", b.id))
@@ -263,8 +271,13 @@ def fps_build(build_id: str, resolucao: str | None = None, store: Store = Depend
 def comparar(a: str, b: str, resolucao: str = Query("1080p"), store: Store = Depends(get_store)):
     ba, bb = _build(store, a), _build(store, b)
     jogos = sorted(set(ba.objetivos.jogos) | set(bb.objetivos.jogos))
-    lado = lambda x: estimar_build(store, [i.componente_id for i in x.itens], jogos, resolucao, agente.custo(store, x.itens) or None)
-    return {"a": lado(ba), "b": lado(bb), "custo_a": agente.custo(store, ba.itens), "custo_b": agente.custo(store, bb.itens)}
+    def lado(x: Build, custo: float):
+        if not jogos:
+            return []
+        return estimar_build(store, [i.componente_id for i in x.itens], jogos, resolucao, custo or None)
+
+    custo_a, custo_b = agente.custo(store, ba.itens), agente.custo(store, bb.itens)
+    return {"a": lado(ba, custo_a), "b": lado(bb, custo_b), "custo_a": custo_a, "custo_b": custo_b}
 
 
 @app.get("/builds/{build_id}/resultado", response_model=resultado.Resultado)
@@ -297,7 +310,8 @@ def exportar_xlsx(build_id: str, dados: Exportar, store: Store = Depends(get_sto
                                       "bloqueantes": [a.descricao for a in bloq]})
         override = True
     res = resultado.calcular(store, b)
-    fps = estimar_build(store, [i.componente_id for i in b.itens], b.objetivos.jogos, b.objetivos.resolucao, res.total or None)
+    jogos = b.objetivos.jogos
+    fps = estimar_build(store, [i.componente_id for i in b.itens], jogos, b.objetivos.resolucao, res.total or None) if jogos else []
     xlsx = exportar.gerar_xlsx(b, res, fps, store.aviso, override)
     b.status = "exportada"
     store.salvar(b)
