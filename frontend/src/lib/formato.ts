@@ -27,8 +27,8 @@ export function quadroEm(tMs: number, fps: number, low: number): number {
 export const brlRedondo = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 /** Nome legível de uma build, no lugar do id: "R$ 7.000 · 1080p a 90 FPS". */
-export const rotuloBuild = (b: { orcamento: number; objetivos: { resolucao: string; fps_alvo: number } }) =>
-  `${brlRedondo(b.orcamento)} · ${b.objetivos.resolucao} a ${b.objetivos.fps_alvo} FPS`;
+export const rotuloBuild = (b: { orcamento: number; objetivos: { jogos: string[]; resolucao: string; fps_alvo: number } }) =>
+  brlRedondo(b.orcamento) + (b.objetivos.jogos.length ? ` · ${b.objetivos.resolucao} a ${b.objetivos.fps_alvo} FPS` : "");
 
 export const MODOS = {
   agente: { nome: "Agente", texto: "O agente escolhe todas as peças." },

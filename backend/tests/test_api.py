@@ -57,6 +57,30 @@ def test_agente_proposta_so_entra_com_clique(client):
     assert client.post(f"/builds/{bid}/aplicar", json={"proposta": True}).status_code == 404
 
 
+def test_jogos_definidos_depois_da_montagem(client):
+    build = client.post("/builds", json={"modo": "agente", "orcamento": 8000, "cep": "58000-000"}).json()
+    url = f"/builds/{build['id']}"
+    assert build["objetivos"]["jogos"] == []
+    assert client.post(f"{url}/agente").status_code == 200
+    montada = client.post(f"{url}/aplicar", json={"proposta": True}).json()
+    assert montada["itens"]
+    assert client.get(f"{url}/fps").json() == []
+    assert client.post(f"{url}/agente").status_code == 200
+
+    objetivos = {"jogos": ["cs2"], "resolucao": "1440p", "fps_alvo": 90}
+    atualizada = client.patch(url, json={"objetivos": objetivos}).json()
+    for campo in ("modo", "orcamento", "cep", "itens"):
+        assert atualizada[campo] == montada[campo]
+    assert atualizada["objetivos"] == objetivos
+    assert client.post(f"{url}/aplicar", json={"proposta": True}).status_code == 404
+    fps = client.get(f"{url}/fps").json()
+    assert [(f["jogo"], f["resolucao"]) for f in fps] == [("cs2", "1440p")]
+
+    assert client.patch(url, json={"orcamento": 9000}).json()["objetivos"] == objetivos
+    assert client.patch(url, json={"objetivos": {**objetivos, "jogos": []}}).status_code == 200
+    assert client.get(f"{url}/fps").json() == []
+
+
 def test_exportacao_bloqueada_e_override_confirmado(client):
     bid = criar(client)
     for c in BASE_OK:

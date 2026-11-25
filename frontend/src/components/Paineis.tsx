@@ -1,10 +1,10 @@
 "use client";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   type Achado, api, type Build, type Componente, type ConsumoSerper, ehOfertaUnica, ErroApi, type Estimativa, formatarConsumoSerper,
   type Importacao, linkOferta, type Modo, type Objetivos, type Proposta, type Resultado, type ResultadoPreco, type Tipo,
 } from "@/lib/api";
-import { brl, brlRedondo, MODOS, SEVERIDADE, TIPOS } from "@/lib/formato";
+import { brl, brlRedondo, MODOS, rotuloBuild, SEVERIDADE, TIPOS } from "@/lib/formato";
 import Fluidez from "./Fluidez";
 
 type Atualizar = (b: Build) => void;
@@ -50,16 +50,14 @@ export const rotuloAgente = (modo: Modo, temItens: boolean) =>
   modo === "manual" ? "Completar com o agente" : modo === "hibrido" ? "Completar o que falta" : temItens ? "Montar de novo" : "Montar com o agente";
 
 // ---------------------------------------------------------------- Entrada (nova build e metas)
-export interface Metas { modo: Modo; orcamento: number; cep: string; objetivos: Objetivos }
+export type Metas = Pick<Build, "modo" | "orcamento" | "cep">;
 
-export function Entrada({ jogos, inicial, onEnviar, onCancelar, rotulo }: {
-  jogos: { id: string; nome: string }[]; inicial: Metas; onEnviar: (f: Metas) => Promise<void> | void; onCancelar?: () => void; rotulo: string;
+export function Entrada({ inicial, onEnviar, onCancelar, rotulo }: {
+  inicial: Metas; onEnviar: (f: Metas) => Promise<void> | void; onCancelar?: () => void; rotulo: string;
 }) {
   const [f, setF] = useState(inicial);
   const { ocupado, erro, rodar } = useAcao();
   useEffect(() => setF(inicial), [inicial]);
-  const obj = (o: Partial<Objetivos>) => setF({ ...f, objetivos: { ...f.objetivos, ...o } });
-  const alternar = (id: string) => obj({ jogos: f.objetivos.jogos.includes(id) ? f.objetivos.jogos.filter((j) => j !== id) : [...f.objetivos.jogos, id] });
   return (
     <form className="card" onSubmit={(e) => { e.preventDefault(); rodar(async () => { await onEnviar(f); }); }}>
       <div className="form-grade">
@@ -68,33 +66,11 @@ export function Entrada({ jogos, inicial, onEnviar, onCancelar, rotulo }: {
           <input type="number" min={500} step={100} value={f.orcamento} onChange={(e) => setF({ ...f, orcamento: +e.target.value })} required aria-describedby="orc-dica" />
           <small id="orc-dica">Em reais, sem as peças que você já tem.</small>
         </label>
-        <div className="campo">
-          <span id="res-rotulo">Resolução</span>
-          <div className="segmentado" role="group" aria-labelledby="res-rotulo">
-            {(["1080p", "1440p"] as const).map((r) => (
-              <button key={r} type="button" aria-pressed={f.objetivos.resolucao === r} onClick={() => obj({ resolucao: r })}>{r}</button>
-            ))}
-          </div>
-        </div>
-        <label className="campo">
-          <span>FPS desejado</span>
-          <input type="number" min={30} max={500} value={f.objetivos.fps_alvo} onChange={(e) => obj({ fps_alvo: +e.target.value })} />
-        </label>
         <label className="campo">
           <span>CEP</span>
           <input inputMode="numeric" pattern="\d{5}-?\d{3}" placeholder="00000-000" value={f.cep} onChange={(e) => setF({ ...f, cep: e.target.value })} aria-describedby="cep-dica" />
           <small id="cep-dica">Opcional, para o frete.</small>
         </label>
-        <fieldset className="campo largo" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend style={{ fontWeight: 500, marginBottom: 8, padding: 0 }}>Jogos</legend>
-          <div className="chips">
-            {jogos.map((j) => (
-              <label key={j.id} className="chip">
-                <input type="checkbox" checked={f.objetivos.jogos.includes(j.id)} onChange={() => alternar(j.id)} /> {j.nome}
-              </label>
-            ))}
-          </div>
-        </fieldset>
         <fieldset className="campo largo" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend style={{ fontWeight: 500, marginBottom: 8, padding: 0 }}>Quem escolhe as peças</legend>
           <div className="modos">
@@ -111,7 +87,7 @@ export function Entrada({ jogos, inicial, onEnviar, onCancelar, rotulo }: {
       <ErroBloco erro={erro} />
       <div className="form-pe">
         {onCancelar && <button type="button" className="btn" onClick={onCancelar}>Cancelar</button>}
-        <button className="btn primario" type="submit" disabled={ocupado || !f.objetivos.jogos.length}>{rotulo}</button>
+        <button className="btn primario" type="submit" disabled={ocupado}>{rotulo}</button>
       </div>
     </form>
   );
@@ -239,22 +215,27 @@ function OrcamentoPecaAPeca({ partes, total, orcamento, foco, onFoco }: { partes
   );
 }
 
-export function VisaoGeral({ build, catalogo, ir, agente }: {
-  build: Build; catalogo: Catalogo; ir: (v: string) => void;
+export function VisaoGeral({ build, catalogo, ir, agente, podeEstimar }: {
+  build: Build; catalogo: Catalogo; ir: (v: string) => void; podeEstimar: boolean;
   agente: { rodar: () => void; ocupado: boolean; proposta: ReactNode };
 }) {
-  const [res, setRes] = useState<Resultado | null>(null);
-  const [fps, setFps] = useState<Estimativa[] | null>(null);
+  const [dados, setDados] = useState<{ chave: string; res: Resultado; fps: Estimativa[] } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [foco, setFoco] = useState<string | null>(null);
   const [tentativa, setTentativa] = useState(0);
-  const assinatura = JSON.stringify([build.itens, build.objetivos]);
+  const temJogos = build.objetivos.jogos.length > 0;
+  const chave = JSON.stringify([build.id, build.itens, build.orcamento, build.cep, build.objetivos]);
+  const res = dados?.chave === chave ? dados.res : null;
+  const fps = dados?.chave === chave ? dados.fps : null;
+  const sugerirJogos = podeEstimar && !temJogos;
   useEffect(() => {
+    let vigente = true;
     setErro(null);
-    Promise.all([api.resultado(build.id), api.fps(build.id)])
-      .then(([r, f]) => { setRes(r); setFps(f); })
-      .catch(() => setErro("Não deu para carregar preços e FPS desta build."));
-  }, [build.id, assinatura, tentativa]);
+    Promise.all([api.resultado(build.id), temJogos ? api.fps(build.id) : []])
+      .then(([res, fps]) => { if (vigente) setDados({ chave, res, fps }); })
+      .catch(() => { if (vigente) setErro("Não deu para carregar o resumo desta build."); });
+    return () => { vigente = false; };
+  }, [build.id, chave, temJogos, tentativa]);
 
   const partes: Parte[] = res
     ? Object.values(res.lojas).flat().map((l) => ({ id: l.componente_id, tipo: catalogo[l.componente_id]?.tipo ?? "extra", nome: l.nome, valor: l.subtotal_ref }))
@@ -268,7 +249,9 @@ export function VisaoGeral({ build, catalogo, ir, agente }: {
   const vazia = build.itens.length === 0;
 
   // a frase do título: o achado do dia, calculado dos números que a tela mostra
-  let achado: ReactNode = `Sem peças ainda. O agente monta a build mais barata que passa de ${alvo} FPS nos seus jogos.`;
+  let achado: ReactNode = vazia
+    ? "Sem peças ainda. Monte com o agente ou escolha as peças manualmente."
+    : null;
   if (!vazia && res) {
     const topo = partes.slice(0, 2);
     const fatia = topo.reduce((s, p) => s + p.valor, 0) / (res.total || 1);
@@ -285,13 +268,14 @@ export function VisaoGeral({ build, catalogo, ir, agente }: {
     <>
       <div className="titulo">
         <div>
-          <h1>Build de {brlRedondo(build.orcamento)}, {build.objetivos.resolucao} a {alvo} FPS</h1>
-          <p className="sub">{achado}</p>
+          <h1>Build de {rotuloBuild(build)}</h1>
+          {achado && <p className="sub">{achado}</p>}
         </div>
         <div className="acoes">
           {!vazia && <button className="btn" disabled={agente.ocupado} onClick={agente.rodar}>{agente.ocupado ? "Montando…" : rotuloAgente(build.modo, true)}</button>}
           {vazia ? <button className="btn primario" disabled={agente.ocupado} onClick={agente.rodar}>{agente.ocupado ? "Montando…" : rotuloAgente(build.modo, false)}</button>
-            : <BotaoExportar build={build} primario />}
+            : <BotaoExportar build={build} primario={!sugerirJogos} />}
+          {sugerirJogos && <button className="btn primario" onClick={() => ir("jogos")}>Ver desempenho em jogos</button>}
         </div>
       </div>
       {agente.proposta}
@@ -309,7 +293,7 @@ export function VisaoGeral({ build, catalogo, ir, agente }: {
         <div className="kpi">
           <span className="rotulo">Jogo mais pesado</span>
           <span className={`valor ${pior && pior.fps_med < alvo ? "neg" : ""}`}>{pior ? <>{Math.round(pior.fps_med)} <small>FPS</small></> : <span className="vazio">-</span>}</span>
-          <span className="nota">{pior ? `${pior.jogo_nome}, alvo ${alvo}` : "precisa de CPU e placa de vídeo"}</span>
+          <span className="nota">{pior ? `${pior.jogo_nome}, alvo ${alvo}` : temJogos ? "precisa de CPU e placa de vídeo" : "nenhum jogo selecionado"}</span>
         </div>
         <div className="kpi">
           <span className="rotulo">Problemas abertos</span>
@@ -339,10 +323,11 @@ export function VisaoGeral({ build, catalogo, ir, agente }: {
         <div className="coluna">
           <section className="card" aria-labelledby="fps-titulo">
             <div className="card-topo">
-              <h2 id="fps-titulo">Jogos a {build.objetivos.resolucao}</h2>
-              <button className="btn texto" onClick={() => ir("jogos")}>Detalhes</button>
+              <h2 id="fps-titulo">{temJogos ? `Jogos a ${build.objetivos.resolucao}` : "Jogos"}</h2>
+              <button className="btn texto" onClick={() => ir("jogos")}>{temJogos ? "Detalhes" : "Configurar jogos"}</button>
             </div>
-            {fps && fps.length === 0 && <p className="vazio-bloco">Precisa de processador e placa de vídeo para estimar.</p>}
+            {!temJogos && <p className="vazio-bloco">Escolha os jogos para estimar o desempenho da build depois da montagem.</p>}
+            {temJogos && fps && fps.length === 0 && <p className="vazio-bloco">Precisa de processador e placa de vídeo para estimar.</p>}
             {fps && fps.length > 0 && (() => {
               const teto = Math.max(alvo * 1.5, ...fps.map((f) => f.fps_med));
               return fps.map((f) => (
@@ -557,99 +542,223 @@ export function Revisao({ build, catalogo, onBuild }: { build: Build; catalogo: 
 }
 
 // ---------------------------------------------------------------- Jogos
-export function Jogos({ build, builds, rotulo }: { build: Build; builds: Build[]; rotulo: (b: Build) => string }) {
+function MetasJogos({ inicial, onSalvar, onCancelar }: {
+  inicial: Objetivos; onSalvar: (objetivos: Objetivos) => Promise<void>; onCancelar?: () => void;
+}) {
+  const [objetivos, setObjetivos] = useState(inicial);
+  const [catalogo, setCatalogo] = useState<Awaited<ReturnType<typeof api.jogos>> | null>(null);
+  const { ocupado, erro, rodar } = useAcao();
+  const carregar = () => rodar(async () => setCatalogo(await api.jogos()));
+  useEffect(() => { void carregar(); }, []);
+  const mudou = JSON.stringify(objetivos) !== JSON.stringify(inicial);
+  const podeSalvar = mudou && (objetivos.jogos.length > 0 || inicial.jogos.length > 0);
+
+  if (!catalogo) return (
+    <section className="card">
+      <ErroBloco erro={erro} onTentar={carregar} />
+      {!erro && <span className="carregando" />}
+    </section>
+  );
+
+  return (
+    <form className="card" aria-label="Metas de jogos" onSubmit={(e) => {
+      e.preventDefault();
+      if (podeSalvar && !ocupado) void rodar(() => onSalvar(objetivos));
+    }}>
+      <div className="form-grade">
+        <fieldset className="campo largo" disabled={ocupado} style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend style={{ fontWeight: 500, marginBottom: 8, padding: 0 }}>Jogos para avaliar</legend>
+          <div className="chips">
+            {catalogo.jogos.map(({ id, nome }) => (
+              <label key={id} className="chip">
+                <input type="checkbox" checked={objetivos.jogos.includes(id)} onChange={(e) => {
+                  const jogos = e.target.checked ? [...objetivos.jogos, id] : objetivos.jogos.filter((jogo) => jogo !== id);
+                  setObjetivos({ ...objetivos, jogos });
+                }} /> {nome}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label className="campo">
+          <span>Resolução</span>
+          <select value={objetivos.resolucao} disabled={ocupado} onChange={(e) => {
+            const resolucao = e.target.value;
+            if (resolucao === "1080p" || resolucao === "1440p") setObjetivos({ ...objetivos, resolucao });
+          }}>
+            <option value="1080p">1080p</option>
+            <option value="1440p">1440p</option>
+          </select>
+        </label>
+        <label className="campo">
+          <span>FPS desejado</span>
+          <input type="number" min={30} max={500} required value={objetivos.fps_alvo || ""} disabled={ocupado}
+            onChange={(e) => setObjetivos({ ...objetivos, fps_alvo: +e.target.value })} />
+        </label>
+      </div>
+      <ErroBloco erro={erro} />
+      <div className="form-pe">
+        {onCancelar && <button className="btn" type="button" disabled={ocupado} onClick={onCancelar}>Cancelar</button>}
+        <button className="btn primario" type="submit" disabled={ocupado || !podeSalvar}>
+          {ocupado ? "Salvando…" : !onCancelar ? "Ver desempenho" : objetivos.jogos.length ? "Atualizar desempenho" : "Limpar seleção"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function Jogos({ build, builds, rotulo, podeEstimar, onSalvar, irParaPecas }: {
+  build: Build; builds: Build[]; rotulo: (b: Build) => string; podeEstimar: boolean;
+  onSalvar: (objetivos: Objetivos) => Promise<void>; irParaPecas: () => void;
+}) {
   const [fps, setFps] = useState<Estimativa[] | null>(null);
+  const [erroFps, setErroFps] = useState<string | null>(null);
+  const [tentativa, setTentativa] = useState(0);
   const [outra, setOutra] = useState("");
   const [comparacao, setComparacao] = useState<{ a: Estimativa[]; b: Estimativa[]; custo_a: number; custo_b: number } | null>(null);
-  const [demo, setDemo] = useState(0);
-  const assinatura = build.itens.map((i) => i.componente_id).join() + build.objetivos.resolucao + build.objetivos.jogos.join();
-  useEffect(() => { api.fps(build.id).then(setFps).catch(() => setFps([])); }, [build.id, assinatura]);
+  const [demo, setDemo] = useState("");
+  const temJogos = build.objetivos.jogos.length > 0;
+  const [editando, setEditando] = useState(false);
+  const tituloResultado = useRef<HTMLHeadingElement>(null);
+  const focarResultado = useRef(false);
   useEffect(() => {
-    if (!outra) return setComparacao(null);
-    api.comparar(build.id, outra, build.objetivos.resolucao).then(setComparacao).catch(() => setComparacao(null));
-  }, [outra, build.id, assinatura]);
+    if (editando || !temJogos || !focarResultado.current) return;
+    focarResultado.current = false;
+    tituloResultado.current?.focus();
+  }, [editando, temJogos]);
+  const assinatura = JSON.stringify([build.itens, build.objetivos.resolucao, build.objetivos.jogos]);
+  useEffect(() => {
+    let vigente = true;
+    setFps(null);
+    setErroFps(null);
+    if (podeEstimar && temJogos) {
+      api.fps(build.id)
+        .then((dados) => { if (vigente) setFps(dados); })
+        .catch(() => { if (vigente) setErroFps("Não deu para carregar as estimativas de FPS."); });
+    }
+    return () => { vigente = false; };
+  }, [build.id, assinatura, podeEstimar, temJogos, tentativa]);
+  useEffect(() => {
+    let vigente = true;
+    setComparacao(null);
+    if (outra && podeEstimar && temJogos) {
+      api.comparar(build.id, outra, build.objetivos.resolucao)
+        .then((dados) => { if (vigente) setComparacao(dados); })
+        .catch(() => { if (vigente) setComparacao(null); });
+    }
+    return () => { vigente = false; };
+  }, [outra, build.id, assinatura, podeEstimar, temJogos]);
   const alvo = build.objetivos.fps_alvo;
-  const e = fps?.[demo];
+  const e = fps?.find((f) => f.jogo === demo) ?? fps?.[0];
+  const demoComparada = comparacao?.b.find((f) => f.jogo === e?.jogo);
+  const salvar = async (objetivos: Objetivos) => {
+    focarResultado.current = objetivos.jogos.length > 0;
+    try {
+      await onSalvar(objetivos);
+      setEditando(false);
+    } catch (erro) {
+      focarResultado.current = false;
+      throw erro;
+    }
+  };
   return (
     <>
       <div className="titulo">
         <div>
           <h1>Jogos</h1>
-          <p className="sub">{build.objetivos.resolucao}, preset {fps?.[0]?.preset ?? "Alto"}, alvo de {alvo} FPS. Medido quando há benchmark; estimado com faixa quando não há.</p>
+          {podeEstimar && !temJogos && <p className="sub">Selecione pelo menos um jogo para estimar o FPS desta build.</p>}
         </div>
+        {podeEstimar && temJogos && !editando && <button className="btn" onClick={() => setEditando(true)}>Editar jogos e metas</button>}
       </div>
-      <section className="card" aria-labelledby="tab-fps">
-        <div className="card-topo"><h2 id="tab-fps">Desempenho previsto</h2></div>
-        {fps === null && <span className="carregando" />}
-        {fps?.length === 0 && <p className="vazio-bloco">Precisa de processador e placa de vídeo na build.</p>}
-        {fps && fps.length > 0 && (
-          <div className="rolagem">
-            <table>
-              <thead><tr><th>Jogo</th><th className="num">FPS médio</th><th className="num">Faixa</th><th className="num">1% low</th><th>Gargalo</th><th>Origem</th><th className="num">FPS por R$ 1 mil</th></tr></thead>
-              <tbody>
-                {fps.map((f) => (
-                  <tr key={f.jogo}>
-                    <td>{f.jogo_nome}</td>
-                    <td className={`num ${f.fps_med < alvo ? "neg" : ""}`}><strong style={{ fontWeight: 500 }}>{Math.round(f.fps_med)}</strong></td>
-                    <td className="num muted">{Math.round(f.fps_min)}-{Math.round(f.fps_max)}</td>
-                    <td className="num">{Math.round(f.fps_1low)}</td>
-                    <td>{f.gargalo === "cpu" ? "Processador" : f.gargalo === "gpu" ? "Placa de vídeo" : <span className="vazio">-</span>}</td>
-                    <td><span className="pill" title={`Fonte: ${f.fontes.join(", ")}`}>{f.tipo}</span> <span className="muted">{f.confianca}</span></td>
-                    <td className="num">{f.fps_por_mil_reais ?? <span className="vazio">-</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      <div className="metade">
-        <section className="card" aria-labelledby="demo-titulo">
-          <div className="card-topo">
-            <h2 id="demo-titulo">Como fica na tela</h2>
-            {fps && fps.length > 0 && (
-              <select value={demo} onChange={(ev) => setDemo(+ev.target.value)} aria-label="Jogo da demonstração">
-                {fps.map((f, i) => <option key={f.jogo} value={i}>{f.jogo_nome}</option>)}
-              </select>
-            )}
-          </div>
-          {e ? (
-            <div style={{ display: "grid", gap: 16 }}>
-              <Fluidez fps={e.fps_med} low={e.fps_1low} rotulo="Esta build" />
-              {comparacao?.b[demo] && <Fluidez fps={comparacao.b[demo].fps_med} low={comparacao.b[demo].fps_1low} rotulo="Build comparada" />}
+      {!podeEstimar && (
+        <section className="card">
+          <div className="card-topo"><h2>Monte a build para estimar o FPS</h2></div>
+          <p className="sub">Adicione processador e placa de vídeo para avaliar o desempenho em jogos.</p>
+          <div className="form-pe"><button className="btn primario" onClick={irParaPecas}>Ir para Peças</button></div>
+        </section>
+      )}
+      {podeEstimar && (!temJogos || editando) && (
+        <MetasJogos inicial={build.objetivos} onSalvar={salvar} onCancelar={editando ? () => setEditando(false) : undefined} />
+      )}
+      {podeEstimar && temJogos && !editando && (
+        <>
+          <section className="card" aria-labelledby="tab-fps">
+            <div className="card-topo">
+              <h2 id="tab-fps" ref={tituloResultado} tabIndex={-1}>Desempenho previsto</h2>
+              <span className="sub">{build.objetivos.resolucao} · {fps?.[0]?.preset ?? "Alto"} · alvo de {alvo} FPS</span>
             </div>
-          ) : <p className="muted">Aparece quando houver estimativa de FPS.</p>}
-        </section>
-        <section className="card" aria-labelledby="cmp-titulo">
-          <div className="card-topo">
-            <h2 id="cmp-titulo">Comparar com outra build</h2>
-            <select value={outra} onChange={(ev) => setOutra(ev.target.value)} aria-label="Build para comparar">
-              <option value="">Escolha uma build</option>
-              {builds.filter((b) => b.id !== build.id).map((b) => <option key={b.id} value={b.id}>{rotulo(b)}</option>)}
-            </select>
+            <ErroBloco erro={erroFps} onTentar={() => setTentativa((t) => t + 1)} />
+            {fps === null && !erroFps && <span className="carregando" />}
+            {fps?.length === 0 && <p className="vazio-bloco">Ainda não há estimativas para os jogos selecionados.</p>}
+            {fps && fps.length > 0 && (
+              <div className="rolagem">
+                <table>
+                  <thead><tr><th>Jogo</th><th className="num">FPS médio</th><th className="num">Faixa</th><th className="num">1% low</th><th>Gargalo</th><th>Origem</th><th className="num">FPS por R$ 1 mil</th></tr></thead>
+                  <tbody>
+                    {fps.map((f) => (
+                      <tr key={f.jogo}>
+                        <td>{f.jogo_nome}</td>
+                        <td className={`num ${f.fps_med < alvo ? "neg" : ""}`}><strong style={{ fontWeight: 500 }}>{Math.round(f.fps_med)}</strong></td>
+                        <td className="num muted">{Math.round(f.fps_min)}-{Math.round(f.fps_max)}</td>
+                        <td className="num">{Math.round(f.fps_1low)}</td>
+                        <td>{f.gargalo === "cpu" ? "Processador" : f.gargalo === "gpu" ? "Placa de vídeo" : <span className="vazio">-</span>}</td>
+                        <td><span className="pill" title={`Fonte: ${f.fontes.join(", ")}`}>{f.tipo}</span> <span className="muted">{f.confianca}</span></td>
+                        <td className="num">{f.fps_por_mil_reais ?? <span className="vazio">-</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          <div className="metade">
+            <section className="card" aria-labelledby="demo-titulo">
+              <div className="card-topo">
+                <h2 id="demo-titulo">Como fica na tela</h2>
+                {fps && fps.length > 0 && (
+                  <select value={e?.jogo ?? ""} onChange={(ev) => setDemo(ev.target.value)} aria-label="Jogo da demonstração">
+                    {fps.map((f) => <option key={f.jogo} value={f.jogo}>{f.jogo_nome}</option>)}
+                  </select>
+                )}
+              </div>
+              {e ? (
+                <div style={{ display: "grid", gap: 16 }}>
+                  <Fluidez fps={e.fps_med} low={e.fps_1low} rotulo="Esta build" />
+                  {demoComparada && <Fluidez fps={demoComparada.fps_med} low={demoComparada.fps_1low} rotulo="Build comparada" />}
+                </div>
+              ) : <p className="muted">Aparece quando houver estimativa de FPS.</p>}
+            </section>
+            <section className="card" aria-labelledby="cmp-titulo">
+              <div className="card-topo">
+                <h2 id="cmp-titulo">Comparar com outra build</h2>
+                <select value={outra} onChange={(ev) => setOutra(ev.target.value)} aria-label="Build para comparar">
+                  <option value="">Escolha uma build</option>
+                  {builds.filter((b) => b.id !== build.id).map((b) => <option key={b.id} value={b.id}>{rotulo(b)}</option>)}
+                </select>
+              </div>
+              {builds.length < 2 && <p className="muted">Crie outra build para comparar lado a lado.</p>}
+              {comparacao && (
+                <table>
+                  <thead><tr><th>Jogo</th><th className="num">Esta <span className="sub">{brl(comparacao.custo_a)}</span></th><th className="num">Outra <span className="sub">{brl(comparacao.custo_b)}</span></th><th className="num">Diferença</th></tr></thead>
+                  <tbody>
+                    {comparacao.a.filter((x) => build.objetivos.jogos.includes(x.jogo)).map((x) => {
+                      const y = comparacao.b.find((f) => f.jogo === x.jogo);
+                      const d = y ? Math.round((y.fps_med / x.fps_med - 1) * 100) : null;
+                      return (
+                        <tr key={x.jogo}>
+                          <td>{x.jogo_nome}</td>
+                          <td className="num">{Math.round(x.fps_med)}</td>
+                          <td className="num">{y ? Math.round(y.fps_med) : <span className="vazio">-</span>}</td>
+                          <td className={`num ${d != null && d < 0 ? "neg" : ""}`}>{d == null ? <span className="vazio">-</span> : `${d > 0 ? "+" : ""}${d}%`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </section>
           </div>
-          {builds.length < 2 && <p className="muted">Crie outra build para comparar lado a lado.</p>}
-          {comparacao && (
-            <table>
-              <thead><tr><th>Jogo</th><th className="num">Esta <span className="sub">{brl(comparacao.custo_a)}</span></th><th className="num">Outra <span className="sub">{brl(comparacao.custo_b)}</span></th><th className="num">Diferença</th></tr></thead>
-              <tbody>
-                {comparacao.a.map((x, i) => {
-                  const y = comparacao.b[i];
-                  const d = y ? Math.round((y.fps_med / x.fps_med - 1) * 100) : null;
-                  return (
-                    <tr key={x.jogo}>
-                      <td>{x.jogo_nome}</td>
-                      <td className="num">{Math.round(x.fps_med)}</td>
-                      <td className="num">{y ? Math.round(y.fps_med) : <span className="vazio">-</span>}</td>
-                      <td className={`num ${d != null && d < 0 ? "neg" : ""}`}>{d == null ? <span className="vazio">-</span> : `${d > 0 ? "+" : ""}${d}%`}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </section>
-      </div>
+        </>
+      )}
     </>
   );
 }

@@ -5,7 +5,7 @@ import {
   Entrada, ErroBloco, Jogos, type Metas, Montagem, PropostaCard, ResultadoPainel, Revisao, useAcao, VisaoGeral,
 } from "@/components/Paineis";
 import {
-  api, type Build, type Cena, type CenaPrevia, type Componente, type ConsumoSerper, ErroApi, type Folga, formatarConsumoSerper, type Proposta,
+  api, type Build, type Cena, type CenaPrevia, type Componente, type ConsumoSerper, ErroApi, type Folga, formatarConsumoSerper, type Objetivos, type Proposta,
 } from "@/lib/api";
 import { ultimaVence } from "@/lib/painel";
 import { MODOS, rotuloBuild } from "@/lib/formato";
@@ -14,7 +14,7 @@ import PainelPeca, { idDaChave } from "@/components/PainelPeca";
 
 const Cena3D = dynamic(() => import("@/components/Cena3D"), { ssr: false, loading: () => <span className="carregando" /> });
 
-const METAS_INICIAIS: Metas = { modo: "agente", orcamento: 6000, cep: "", objetivos: { jogos: ["cyberpunk-2077", "cs2", "fortnite"], resolucao: "1080p", fps_alvo: 60 } };
+const METAS_INICIAIS: Metas = { modo: "agente", orcamento: 6000, cep: "" };
 
 // a visão geral é o "Resumo"; as etapas seguem a ordem de quem monta um PC
 const VISTAS = [
@@ -58,7 +58,6 @@ export default function Pagina() {
   const [vista, ir] = useVista();
   const [fonteDados, setFonteDados] = useState("");
   const [consumoSerper, setConsumoSerper] = useState<ConsumoSerper | null>(null);
-  const [jogos, setJogos] = useState<{ id: string; nome: string }[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, Componente>>({});
   const [builds, setBuilds] = useState<Build[]>([]);
   const [build, setBuild] = useState<Build | null>(null);
@@ -80,11 +79,10 @@ export default function Pagina() {
 
   useEffect(() => {
     setErro(null);
-    Promise.all([api.saude(), api.jogos(), api.catalogo(), api.builds()])
-      .then(([s, j, c, b]) => {
+    Promise.all([api.saude(), api.catalogo(), api.builds()])
+      .then(([s, c, b]) => {
         setFonteDados(s.dados);
         setConsumoSerper(s.consumo_serper ?? null);
-        setJogos(j.jogos);
         setCatalogo(Object.fromEntries(c.map((x) => [x.id, x])));
         setBuilds(b);
         if (b.length) setBuild(b[b.length - 1]);
@@ -93,8 +91,8 @@ export default function Pagina() {
       .catch(() => setErro("Não deu para falar com a API. Confira se o backend está rodando."));
   }, [tentativa]);
 
-  const atualizar = useCallback((b: Build) => {
-    setBuild(b);
+  const atualizar = useCallback((b: Build, nova = false) => {
+    setBuild((atual) => nova || atual?.id === b.id ? b : atual);
     setBuilds((xs) => (xs.some((x) => x.id === b.id) ? xs.map((x) => (x.id === b.id ? b : x)) : [...xs, b]));
   }, []);
 
@@ -102,7 +100,8 @@ export default function Pagina() {
   useEffect(() => {
     if (build && vista === "3d") api.cena(build.id).then(setCena).catch(() => setCena(null));
   }, [vista, build?.id, assinatura]);
-  useEffect(() => { setProposta(null); setAberta(null); setDestaque(null); }, [build?.id]);
+  useEffect(() => { setAberta(null); setDestaque(null); }, [build?.id]);
+  useEffect(() => { setProposta(null); }, [build?.id, build?.objetivos.jogos.join(), build?.objetivos.resolucao, build?.objetivos.fps_alvo]);
 
   const mensagem = (e: unknown) => (e instanceof ErroApi || e instanceof Error ? e.message : String(e));
   const pedirPrevia = useCallback((de: string, para: string) => {
@@ -150,7 +149,9 @@ export default function Pagina() {
   const rotulo = (b: Build) => `${rotuloBuild(b)} · ${MODOS[b.modo].nome}`;
   const abertos = build?.achados.filter((a) => a.status === "aberto") ?? [];
   const bloqueantes = abertos.filter((a) => a.severidade === "bloqueante").length;
-  const metasDaBuild = useMemo<Metas>(() => (build ? { modo: build.modo, orcamento: build.orcamento, cep: build.cep, objetivos: build.objetivos } : METAS_INICIAIS), [build?.id]);
+  const metasDaBuild = useMemo<Metas>(() => (build ? { modo: build.modo, orcamento: build.orcamento, cep: build.cep } : METAS_INICIAIS), [build?.modo, build?.orcamento, build?.cep]);
+  const tiposNaBuild = new Set(build?.itens.map((i) => catalogo[i.componente_id]?.tipo));
+  const podeEstimar = tiposNaBuild.has("cpu") && tiposNaBuild.has("gpu");
 
   const agente = {
     ocupado: agenteAcao.ocupado,
@@ -166,8 +167,11 @@ export default function Pagina() {
     ),
   };
 
-  const criar = async (f: Metas) => { atualizar(await api.criar(f)); navegar("visao"); };
+  const criar = async (f: Metas) => { atualizar(await api.criar(f), true); navegar("visao"); };
   const salvarMetas = async (f: Metas) => { if (build) { atualizar(await api.atualizar(build.id, f)); navegar("visao"); } };
+  const salvarJogos = async (objetivos: Objetivos) => {
+    if (build) atualizar(await api.atualizar(build.id, { objetivos }));
+  };
   const semBuild = carregado && !build;
   const vistaAtual = semBuild ? "nova" : vista;
   // etapa feita: o que já dá para afirmar com os dados da build
@@ -213,19 +217,24 @@ export default function Pagina() {
             <div className="titulo">
               <div>
                 <h1>{vistaAtual === "nova" ? "Nova build" : "Metas da build"}</h1>
-                <p className="sub">Orçamento, jogos e FPS que você quer. Com isso o agente escolhe as peças, ou você monta à mão.</p>
+                <p className="sub">Defina o orçamento e como você quer escolher as peças. Depois da montagem, confira o desempenho na aba Jogos.</p>
               </div>
             </div>
             {vistaAtual === "nova"
-              ? <Entrada jogos={jogos} inicial={METAS_INICIAIS} onEnviar={criar} onCancelar={build ? () => navegar("visao") : undefined} rotulo="Criar build" />
-              : <Entrada jogos={jogos} inicial={metasDaBuild} onEnviar={salvarMetas} onCancelar={() => navegar("visao")} rotulo="Salvar metas" />}
+              ? <Entrada key="nova" inicial={METAS_INICIAIS} onEnviar={criar} onCancelar={build ? () => navegar("visao") : undefined} rotulo="Criar build" />
+              : <Entrada key={build?.id} inicial={metasDaBuild} onEnviar={salvarMetas} onCancelar={() => navegar("visao")} rotulo="Salvar metas" />}
           </>
         )}
 
-        {build && vistaAtual === "visao" && <VisaoGeral build={build} catalogo={catalogo} ir={navegar} agente={agente} />}
+        {build && vistaAtual === "visao" && (
+          <VisaoGeral build={build} catalogo={catalogo} ir={navegar} agente={agente} podeEstimar={podeEstimar} />
+        )}
         {build && vistaAtual === "pecas" && <Montagem build={build} catalogo={catalogo} onBuild={atualizar} agente={agente} />}
         {build && vistaAtual === "revisao" && <Revisao build={build} catalogo={catalogo} onBuild={atualizar} />}
-        {build && vistaAtual === "jogos" && <Jogos build={build} builds={builds} rotulo={rotulo} />}
+        {build && vistaAtual === "jogos" && (
+          <Jogos key={build.id} build={build} builds={builds} rotulo={rotulo} onSalvar={salvarJogos}
+            podeEstimar={podeEstimar} irParaPecas={() => navegar("pecas")} />
+        )}
         {build && vistaAtual === "compra" && <ResultadoPainel build={build} catalogo={catalogo} onBuild={atualizar} />}
         {build && vistaAtual === "3d" && (
           <>

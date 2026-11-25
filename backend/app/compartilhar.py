@@ -13,7 +13,10 @@ TIPOS = {"cpu": "CPU", "gpu": "Placa de vídeo", "placa_mae": "Placa-mãe", "mem
 
 
 def markdown(store: Store, build: Build) -> str:
-    linhas = [f"# Build {build.id}", "", f"Orçamento: {brl(build.orcamento)} · {build.objetivos.resolucao} @ {build.objetivos.fps_alvo} FPS", ""]
+    orcamento = f"Orçamento: {brl(build.orcamento)}"
+    if build.objetivos.jogos:
+        orcamento += f" · {build.objetivos.resolucao} @ {build.objetivos.fps_alvo} FPS"
+    linhas = [f"# Build {build.id}", "", orcamento, ""]
     total = 0.0
     for i in build.itens:
         c = store.componentes.get(i.componente_id)
