@@ -11,6 +11,12 @@ from app.modelos import BuildItem
 from app.store import get_store, novo_store
 
 
+@pytest.fixture(autouse=True)
+def _llm_sem_cache():
+    from app import llm
+    llm._cache.clear()
+
+
 @pytest.fixture
 def store():
     return novo_store()

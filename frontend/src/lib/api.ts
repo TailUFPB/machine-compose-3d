@@ -26,7 +26,12 @@ export interface Componente {
   id: string; tipo: Tipo; marca: string; modelo: string; nome: string; specs: Record<string, any>; fonte: string;
   compativel: boolean; motivo: string | null; preco: Preco;
 }
-export interface Proposta { itens: BuildItem[]; achados: Achado[]; tentativas: number; convergiu: boolean; avisos: string[]; custo_estimado: number | null; custo_minimo: number | null }
+export type Perfil = "economica" | "equilibrada" | "com_folga";
+export interface Tentativa { n: number; bloqueantes: number; alertas: number; mudancas: string[] }
+export interface Proposta {
+  itens: BuildItem[]; achados: Achado[]; tentativas: number; convergiu: boolean; avisos: string[]; custo_estimado: number | null; custo_minimo: number | null;
+  perfil: Perfil; fps_min: number | null; comparacao: string | null; historico: Tentativa[]; alternativas: Proposta[];
+}
 export interface Estimativa {
   jogo: string; jogo_nome: string; resolucao: string; preset: string; fps_med: number; fps_min: number; fps_max: number;
   fps_1low: number; tipo: "medido" | "estimado"; confianca: string; gargalo: "cpu" | "gpu" | null; fontes: string[];
@@ -126,7 +131,7 @@ export const api = {
   revisar: (id: string) => post<Build>(`/builds/${id}/revisar`),
   importar: (id: string, texto: string, ja_tenho: boolean) => post<Importacao>(`/builds/${id}/importar`, { texto, ja_tenho }),
   agente: (id: string) => post<Proposta>(`/builds/${id}/agente`),
-  aplicar: (id: string, corpo: { proposta?: boolean; achado_id?: string; itens?: BuildItem[] }) => post<Build>(`/builds/${id}/aplicar`, corpo),
+  aplicar: (id: string, corpo: { proposta?: boolean; perfil?: Perfil; achado_id?: string; itens?: BuildItem[] }) => post<Build>(`/builds/${id}/aplicar`, corpo),
   ignorar: (id: string, achado: string) => post<Build>(`/builds/${id}/achados/${encodeURIComponent(achado)}/ignorar`),
   precos: (id: string) => req<ResultadoPreco[]>(`/builds/${id}/precos`),
   fps: (id: string) => req<Estimativa[]>(`/builds/${id}/fps`),

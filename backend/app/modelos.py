@@ -91,6 +91,17 @@ class ItemAtualizar(BaseModel):
     ja_tenho: bool | None = None
 
 
+Perfil = Literal["economica", "equilibrada", "com_folga"]
+
+
+class Tentativa(BaseModel):
+    """Uma rodada do loop propositor x revisores: o que a revisão achou e o que o propositor mudou por causa disso."""
+    n: int
+    bloqueantes: int
+    alertas: int
+    mudancas: list[str] = Field(default_factory=list)
+
+
 class Proposta(BaseModel):
     itens: list[BuildItem]
     achados: list[Achado]
@@ -99,11 +110,17 @@ class Proposta(BaseModel):
     avisos: list[str] = Field(default_factory=list)
     custo_estimado: float | None = None
     custo_minimo: float | None = None
+    perfil: Perfil = "equilibrada"
+    fps_min: float | None = None           # menor FPS médio entre os jogos da build
+    comparacao: str | None = None          # escolha x segunda melhor opção, em R$ e FPS
+    historico: list[Tentativa] = Field(default_factory=list)
+    alternativas: list[Proposta] = Field(default_factory=list)   # outros perfis, quando dão build diferente
 
 
 class Aplicar(BaseModel):
     """Único caminho para mudança automática na build: sempre disparado por clique do usuário."""
     proposta: bool = False
+    perfil: Perfil | None = None           # com proposta=True: aplica a alternativa desse perfil
     achado_id: str | None = None
     itens: list[BuildItem] | None = None   # importação aceita
 

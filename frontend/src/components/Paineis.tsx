@@ -2,7 +2,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import {
   type Achado, api, type Build, type Componente, type ConsumoSerper, ehOfertaUnica, ErroApi, type Estimativa, formatarConsumoSerper,
-  type Importacao, linkOferta, type Modo, type Objetivos, type Proposta, type Resultado, type ResultadoPreco, type Tipo,
+  type Importacao, linkOferta, type Modo, type Objetivos, type Perfil, type Proposta, type Resultado, type ResultadoPreco, type Tipo,
 } from "@/lib/api";
 import { brl, brlRedondo, MODOS, SEVERIDADE, TIPOS } from "@/lib/formato";
 import Fluidez from "./Fluidez";
@@ -118,34 +118,74 @@ export function Entrada({ jogos, inicial, onEnviar, onCancelar, rotulo }: {
 }
 
 // ---------------------------------------------------------------- Proposta do agente
-export function PropostaCard({ proposta, catalogo, onAplicar, onDescartar, ocupado }: {
-  proposta: Proposta; catalogo: Catalogo; onAplicar: () => void; onDescartar: () => void; ocupado: boolean;
+const PERFIS: Record<Perfil, string> = { economica: "Econômica", equilibrada: "Equilibrada", com_folga: "Com folga" };
+
+export function PropostaCard({ proposta: principal, build, catalogo, onAplicar, onDescartar, ocupado }: {
+  proposta: Proposta; build: Build; catalogo: Catalogo; onAplicar: (perfil: Perfil) => void; onDescartar: () => void; ocupado: boolean;
 }) {
+  const [perfil, setPerfil] = useState<Perfil>(principal.perfil);
+  const opcoes = [principal, ...principal.alternativas].sort((a, b) => (a.custo_estimado ?? 0) - (b.custo_estimado ?? 0));
+  const proposta = opcoes.find((p) => p.perfil === perfil) ?? principal;
   const alertas = proposta.achados.filter((a) => a.severidade !== "sugestao");
+  // diferença para a build atual: o que entra, o que fica e o que sai ao aplicar
+  const atuais = new Set(build.itens.map((i) => i.componente_id));
+  const propostos = new Set(proposta.itens.map((i) => i.componente_id));
+  const saem = build.itens.filter((i) => !propostos.has(i.componente_id));
+  const nome = (id: string) => catalogo[id]?.nome ?? id;
   return (
     <section className="card proposta" aria-labelledby="proposta-titulo">
       <div className="card-topo">
         <h2 id="proposta-titulo">Proposta do agente</h2>
         <span className="meta num">
-          {brl(proposta.custo_estimado)} (mediana){proposta.custo_minimo != null && ` · menor: ${brl(proposta.custo_minimo)}`} · {proposta.tentativas} {proposta.tentativas === 1 ? "rodada" : "rodadas"} de revisão
+          {brl(proposta.custo_estimado)} (mediana){proposta.custo_minimo != null && ` · menor: ${brl(proposta.custo_minimo)}`}
+          {proposta.fps_min != null && ` · ${Math.round(proposta.fps_min)} FPS no jogo mais pesado`}
         </span>
       </div>
+      {opcoes.length > 1 && (
+        <div className="segmentado" role="group" aria-label="Alternativas da proposta" style={{ marginBottom: 12 }}>
+          {opcoes.map((p) => (
+            <button key={p.perfil} type="button" aria-pressed={p.perfil === proposta.perfil} onClick={() => setPerfil(p.perfil)}>
+              {PERFIS[p.perfil]} · {brlRedondo(p.custo_estimado ?? 0)}
+            </button>
+          ))}
+        </div>
+      )}
+      {proposta.comparacao && <p className="muted">{proposta.comparacao}</p>}
       {proposta.avisos.map((a) => <p key={a} className="aviso-bloco">{a}</p>)}
       <ul className="lista">
         {proposta.itens.map((i) => {
           const c = catalogo[i.componente_id];
           return (
             <li key={i.componente_id}>
-              <span className="linha1">{c?.nome ?? i.componente_id}{i.travado && <span className="muted"> · travada</span>}</span>
+              <span className="linha1">
+                {c?.nome ?? i.componente_id}{i.travado && <span className="muted"> · travada</span>}
+                {atuais.size > 0 && (atuais.has(i.componente_id) ? <span className="muted"> · já na build</span> : <> <span className="pill pos">entra</span></>)}
+              </span>
               <span className="dir"><Preco v={c?.preco.med} />{c?.preco.min != null && <small>mín {brl(c.preco.min)}</small>}</span>
               {i.justificativa && <span className="linha2">{i.justificativa}</span>}
             </li>
           );
         })}
+        {saem.map((i) => (
+          <li key={i.componente_id}>
+            <span className="linha1"><s>{nome(i.componente_id)}</s> <span className="pill neg">sai</span></span>
+          </li>
+        ))}
       </ul>
       {alertas.map((a) => <p key={a.id}><span className={`pill ${SEV_PILL[a.severidade]}`}>{SEVERIDADE[a.severidade]}</span> {a.descricao}</p>)}
+      <details style={{ marginTop: 12 }}>
+        <summary>{proposta.tentativas} {proposta.tentativas === 1 ? "rodada" : "rodadas"} de revisão</summary>
+        <ol>
+          {proposta.historico.map((t) => (
+            <li key={t.n}>
+              {t.bloqueantes} {t.bloqueantes === 1 ? "bloqueante" : "bloqueantes"}, {t.alertas} {t.alertas === 1 ? "alerta" : "alertas"}
+              {t.mudancas.length ? <ul>{t.mudancas.map((m) => <li key={m}>{m}</li>)}</ul> : ": nada a corrigir."}
+            </li>
+          ))}
+        </ol>
+      </details>
       <div className="acoes" style={{ marginTop: 16 }}>
-        <button className="btn primario" disabled={ocupado} onClick={onAplicar}>Aplicar na build</button>
+        <button className="btn primario" disabled={ocupado} onClick={() => onAplicar(proposta.perfil)}>Aplicar na build</button>
         <button className="btn" onClick={onDescartar}>Descartar</button>
       </div>
     </section>

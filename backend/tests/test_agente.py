@@ -79,3 +79,38 @@ def test_proposta_e_resultado_unificam_mediana_e_expoem_minimo(store):
     res = resultado.calcular(store, b_aplicada)
     assert res.total == p.custo_estimado
     assert res.total_minimo == p.custo_minimo
+
+
+def test_perfis_viram_alternativas_e_o_equilibrado_resolve_alertas(store):
+    p = agente.propor(store, nova(store, orcamento=7000))
+    eco = next(a for a in p.alternativas if a.perfil == "economica")
+    aberto = lambda q: [a for a in q.achados if a.severidade == "atencao"]
+    assert p.perfil == "equilibrada" and not aberto(p) and aberto(eco)
+    assert eco.custo_estimado < p.custo_estimado <= 7000
+    assert p.historico[0].mudancas and p.tentativas == len(p.historico)
+    assert len({frozenset(i.componente_id for i in q.itens) for q in [p, *p.alternativas]}) == 1 + len(p.alternativas)
+
+
+def test_comparacao_com_a_segunda_opcao_traz_reais_e_fps(store):
+    p = agente.propor(store, nova(store, orcamento=7000))
+    assert "R$" in p.comparacao and "% de FPS" in p.comparacao and p.fps_min >= 60
+
+
+def test_memoria_nao_passa_da_fatia_do_orcamento(store, monkeypatch):
+    caro = {"ram-lpx-d4-32": 3057.0, "ram-fury-d5-32": 3057.0, "ram-lancer-d5-32": 3057.0, "ram-veng-d5-32": 3057.0}
+    real = agente.preco_ref
+    monkeypatch.setattr(agente, "preco_ref", lambda s, cid, **k: caro.get(cid) or real(s, cid, **k))
+    pecas = agente._completar(store, {"cpu": store.componentes["r5-5500"], "gpu": store.componentes["rx-7600"]}, 7000)
+    assert pecas["memoria"].specs["capacidade_gb"] == 16
+
+
+def test_upgrade_troca_a_gpu_que_o_usuario_ja_tem_quando_nao_chega_no_alvo(store):
+    tenho = [BuildItem(componente_id=i, ja_tenho=True) for i in
+             ["r5-7600", "mb-b650-gx-ax", "ram-fury-d5-32", "ssd-nv3-1t", "psu-rm850e", "case-lancool-216", "rtx-3050-6g"]]
+    p = agente.propor(store, nova(store, modo="hibrido", orcamento=4000, itens=tenho, resolucao="1080p"))
+    t = tipos(store, p)
+    assert t["gpu"].componente_id != "rtx-3050-6g" and not t["gpu"].ja_tenho and t["gpu"].justificativa.startswith("Upgrade")
+    assert t["cpu"].ja_tenho and p.custo_estimado <= 4000 and any(a.startswith("Upgrade") for a in p.avisos)
+    travada = [i.model_copy(update={"travado": i.componente_id == "rtx-3050-6g"}) for i in tenho]
+    p = agente.propor(store, nova(store, modo="hibrido", orcamento=4000, itens=travada, resolucao="1080p"))
+    assert tipos(store, p)["gpu"].componente_id == "rtx-3050-6g"

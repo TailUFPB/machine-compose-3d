@@ -88,7 +88,7 @@ def revisar_build(store: Store, build: Build, itens: list[BuildItem] | None = No
     alvo = build if itens is build.itens else build.model_copy(update={"itens": itens})
     with span("revisao_camada1"):
         c1 = regras.avaliar(store, itens)
-    c2 = revisores.revisar(store, itens, llm=llm)
+    c2 = revisores.revisar(store, itens, llm=llm, objetivos=build.objetivos)
     with span("consolidador"):
         return consolidar(store, alvo, c1 + c2)
 

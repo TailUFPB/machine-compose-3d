@@ -202,6 +202,10 @@ def aplicar(build_id: str, dados: Aplicar, store: Store = Depends(get_store)):
         p = store.propostas.pop(b.id, None)
         if not p:
             raise HTTPException(404, "nenhuma proposta pendente: rode o agente antes")
+        if dados.perfil and dados.perfil != p.perfil:
+            p = next((a for a in p.alternativas if a.perfil == dados.perfil), None)
+            if not p:
+                raise HTTPException(404, "a proposta não tem alternativa nesse perfil")
         b.itens = [i.model_copy() for i in p.itens]
     elif dados.achado_id:
         a = next((x for x in b.achados if x.id == dados.achado_id), None)

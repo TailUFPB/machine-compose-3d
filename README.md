@@ -36,6 +36,8 @@ Sem `.env`, tudo roda offline: agentes e extração usam o caminho determinísti
 
 ```bash
 cd backend && uv run pytest        # regras, revisores, consolidador, preço, FPS, agente, importação, API
+cd backend && uv run python -m app.evals         # evals dos revisores: achados perdidos e falsos por revisor
+cd backend && uv run python -m app.evals --llm   # idem com o LLM do .env: quantas dicas acrescenta e quantas têm evidência (--ver lista)
 cd frontend && pnpm test           # layout 3D, tutorial, demo de fluidez, formatação
 cd frontend && pnpm e2e            # cena 3D no navegador (Playwright): interação, conflitos e taxa de quadros
 ```
@@ -55,9 +57,16 @@ psql "$DATABASE_URL" -f supabase/seed.sql
   adição, filtra peças compatíveis (com "ver incompatíveis" mostrando o motivo) e oferece o agente como copiloto.
 - **Agente selecionador:** escolhe o par CPU+GPU de menor custo que atinge o FPS-alvo com 15% de folga, completa a
   plataforma pela peça mais barata que atende às restrições e entra no loop propositor ↔ revisores
-  (`AGENTE_MAX_TENTATIVAS`). Se o limite estourar, entrega a melhor versão com os alertas.
+  (`AGENTE_MAX_TENTATIVAS`). Se o limite estourar, entrega a melhor versão com os alertas. A proposta sai em até três
+  perfis (`agente.PERFIS`): *econômica* (alvo seco, só corrige bloqueante), *equilibrada* (15% de folga, corrige
+  também os alertas com o que sobra do orçamento) e *com folga* (30%, corrige também sugestões de troca). Cada uma
+  traz a comparação com a segunda melhor opção em R$ e FPS, o histórico das rodadas e o aviso quando uma peça de
+  apoio passa da fatia do orçamento (`agente.TETO_CATEGORIA`). Com CPU ou GPU marcada "já tenho" (sem travar) abaixo
+  do alvo, propõe o pacote de upgrade com mais FPS por real.
 - **Revisão:** camada 1 (`compat/regras.py`: socket, DDR, slots, form factor, GPU × folga, cooler, TDP × fonte e itens
-  faltantes); camada 2 (`compat/revisores.py`: Plataforma, Espaço físico, Elétrico); consolidador (duplicatas,
+  faltantes); camada 2 (`compat/revisores.py`: Plataforma, Espaço físico, Elétrico, Fluxo de ar, Armazenamento, Térmico,
+  Gargalo; com LLM, uma leitura do conjunto por build, com cache por combinação de peças, cujas dicas só contam
+  como verificadas se as evidências citadas baterem com as fichas); consolidador (duplicatas,
   contradições, severidade, impacto em preço e FPS).
 - **Achado bloqueante:** `BLOQUEANTE_BLOQUEIA_EXPORTACAO=true` impede a exportação (409). O usuário pode forçar
   digitando a confirmação `EXPORTAR MESMO ASSIM`, e a planilha registra o override.

@@ -17,15 +17,18 @@ def llm_falso(monkeypatch):
     return respostas
 
 
-def test_achado_do_llm_sem_fonte_permitida_fica_nao_verificado(store, llm_falso):
+def test_dica_do_llm_so_e_verificada_com_evidencia_que_bate_com_a_ficha(store, llm_falso):
+    ev = lambda campo, valor: {"peca": "psu-a750gl", "campo": campo, "valor": valor}
     llm_falso["proxima"] = json.dumps({"achados": [
-        {"severidade": "bloqueante", "itens_envolvidos": ["psu-a750gl"], "descricao": "palpite", "fonte_url": "https://inventada"},
-        {"severidade": "atencao", "itens_envolvidos": ["psu-a750gl"], "descricao": "com fonte", "fonte_url": "seed:demo/ficha-tecnica"},
+        {"severidade": "bloqueante", "descricao": "palpite"},
+        {"severidade": "sugestao", "descricao": "com evidência", "evidencias": [ev("potencia_w", 750), ev("conectores.12V-2x6", 1)]},
+        {"severidade": "atencao", "descricao": "leu errado", "evidencias": [ev("potencia_w", 550)]},
     ]})
-    achados = [a for a in revisores.revisar(store, itens("rtx-4060-8g", "psu-a750gl"), ["eletrico"]) if "llm" in a.id]
-    palpite = next(a for a in achados if a.descricao == "palpite")
-    assert not palpite.verificado and palpite.fonte_url is None and palpite.severidade == "atencao"
-    assert next(a for a in achados if a.descricao == "com fonte").verificado
+    achados = {a.descricao: a for a in revisores.revisar(store, itens("rtx-4060-8g", "psu-a750gl")) if a.agente == "conjunto"}
+    assert set(achados) == {"palpite", "com evidência"}   # evidência que não bate com a ficha descarta a dica
+    assert not achados["palpite"].verificado and achados["palpite"].severidade == "atencao"
+    boa = achados["com evidência"]
+    assert boa.verificado and boa.itens_envolvidos == ["psu-a750gl"] and boa.fonte_url == store.componentes["psu-a750gl"].fonte
 
 
 def test_extracao_ignora_preco_alucinado(store, llm_falso):
@@ -58,3 +61,14 @@ def test_openrouter_usa_endpoint_padrao(monkeypatch):
     monkeypatch.setattr(get_settings(), "llm_base_url", "")
     assert llm._texto("s", "u") == "{}"
     assert usado["base_url"] == llm.OPENROUTER_URL
+
+
+def test_revisao_faz_uma_chamada_por_combinacao_de_pecas(store, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(get_settings(), "llm_provider", "openai")
+    monkeypatch.setattr(llm, "_texto", lambda system, user: chamadas.append(user) or '{"achados": []}')
+    for _ in range(2):
+        revisores.revisar(store, itens("rtx-4060-8g", "psu-a750gl"))
+    assert len(chamadas) == 1   # uma leitura do conjunto, e a repetição sai do cache
+    revisores.revisar(store, itens("rtx-4070s", "psu-a750gl"))
+    assert len(chamadas) == 2 and chamadas[0].startswith("PEÇAS: ")   # peças primeiro: prefixo estável para o cache

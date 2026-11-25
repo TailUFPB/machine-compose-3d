@@ -1,0 +1,223 @@
+[
+ {
+  "nome": "build_sem_problema",
+  "itens": [
+   "r5-7600",
+   "mb-b650-gx-ax",
+   "ram-fury-d5-32",
+   "ssd-nv3-1t",
+   "psu-a750gl",
+   "case-lancool-216",
+   "rtx-4060-8g"
+  ],
+  "esperados": {
+   "plataforma": [],
+   "espaco_fisico": [],
+   "eletrico": [],
+   "fluxo_de_ar": [],
+   "armazenamento": [],
+   "termico": [],
+   "gargalo": []
+  }
+ },
+ {
+  "nome": "bios_sem_flashback",
+  "itens": [
+   "r7-9800x3d",
+   "mb-b650m-a",
+   "ram-fury-d5-32",
+   "ssd-nv3-1t",
+   "psu-rm850e",
+   "case-lancool-216",
+   "rtx-4070s",
+   "clr-pa120se"
+  ],
+  "esperados": {
+   "plataforma": [
+    "plataforma:bios"
+   ],
+   "eletrico": [],
+   "termico": [],
+   "armazenamento": [
+    "armazenamento:m2_sem_dissipador"
+   ]
+  }
+ },
+ {
+  "nome": "a620_com_cpu_quente",
+  "itens": [
+   "r7-7800x3d",
+   "mb-a620m-hdv",
+   "ram-fury-d5-32",
+   "ssd-nv3-1t",
+   "psu-rm850e",
+   "case-lancool-216",
+   "rtx-4070s",
+   "clr-pa120se"
+  ],
+  "esperados": {
+   "plataforma": [
+    "plataforma:chipset"
+   ],
+   "espaco_fisico": []
+  }
+ },
+ {
+  "nome": "ram_alta_sob_cooler",
+  "itens": [
+   "r5-7600",
+   "mb-b650-gx-ax",
+   "ram-veng-d5-32",
+   "clr-nhd15",
+   "case-lancool-216"
+  ],
+  "esperados": {
+   "espaco_fisico": [
+    "espaco:ram_cooler"
+   ],
+   "plataforma": [],
+   "termico": []
+  }
+ },
+ {
+  "nome": "radiador_na_frente_da_gpu",
+  "itens": [
+   "clr-lf3-360",
+   "rtx-4080s",
+   "case-h5-flow",
+   "r7-7800x3d"
+  ],
+  "esperados": {
+   "espaco_fisico": [
+    "espaco:radiador_gpu"
+   ],
+   "fluxo_de_ar": [
+    "fluxo:radiador_gpu"
+   ],
+   "termico": []
+  }
+ },
+ {
+  "nome": "fonte_sem_conector",
+  "itens": [
+   "rtx-4080s",
+   "psu-cx650",
+   "r7-7800x3d",
+   "clr-pa120se"
+  ],
+  "esperados": {
+   "eletrico": [
+    "eletrico:conector",
+    "eletrico:pico",
+    "eletrico:qualidade"
+   ]
+  }
+ },
+ {
+  "nome": "fonte_nativa_sem_alerta",
+  "itens": [
+   "rtx-4070s",
+   "psu-rm850e",
+   "r5-7600"
+  ],
+  "esperados": {
+   "eletrico": []
+  }
+ },
+ {
+  "nome": "dois_m2_em_um_slot",
+  "itens": [
+   "r5-7600",
+   "mb-a620m-hdv",
+   "ssd-nv3-1t",
+   "ssd-sn770-1t"
+  ],
+  "esperados": {
+   "armazenamento": [
+    "armazenamento:m2_slots"
+   ]
+  }
+ },
+ {
+  "nome": "cooler_fraco_para_a_cpu",
+  "itens": [
+   "i7-14700kf",
+   "clr-ak400",
+   "mb-z790-ud"
+  ],
+  "esperados": {
+   "termico": [
+    "termico:cooler_fraco"
+   ]
+  }
+ },
+ {
+  "nome": "cooler_de_fabrica_no_limite",
+  "itens": [
+   "i5-13400f",
+   "mb-b760m-d4"
+  ],
+  "esperados": {
+   "termico": [
+    "termico:cooler_box"
+   ]
+  }
+ },
+ {
+  "nome": "cpu_segura_a_gpu",
+  "resolucao": "1080p",
+  "itens": [
+   "r5-5500",
+   "rtx-4080s",
+   "mb-b550m-vdh"
+  ],
+  "esperados": {
+   "gargalo": [
+    "gargalo:cpu"
+   ]
+  }
+ },
+ {
+  "nome": "cpu_sobra_para_a_gpu",
+  "resolucao": "1440p",
+  "itens": [
+   "r7-9800x3d",
+   "rtx-3050-6g",
+   "mb-b850-tomahawk",
+   "clr-pa120se"
+  ],
+  "esperados": {
+   "gargalo": [
+    "gargalo:cpu_sobra"
+   ],
+   "termico": []
+  }
+ },
+ {
+  "nome": "par_equilibrado",
+  "resolucao": "1440p",
+  "itens": [
+   "r5-7600",
+   "rtx-4060-8g",
+   "mb-b650-gx-ax"
+  ],
+  "esperados": {
+   "gargalo": []
+  }
+ },
+ {
+  "nome": "gabinete_sem_entrada_de_ar",
+  "itens": [
+   "r5-5500",
+   "rx-7600",
+   "mb-b550m-vdh",
+   "case-q300l"
+  ],
+  "esperados": {
+   "fluxo_de_ar": [
+    "fluxo:poucas_fans",
+    "fluxo:sem_entrada"
+   ]
+  }
+ }
+]
