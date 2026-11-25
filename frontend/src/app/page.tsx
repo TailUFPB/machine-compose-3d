@@ -159,8 +159,8 @@ export default function Pagina() {
       <>
         <ErroBloco erro={agenteAcao.erro} />
         {proposta && build && (
-          <PropostaCard proposta={proposta} catalogo={catalogo} ocupado={agenteAcao.ocupado} onDescartar={() => setProposta(null)}
-            onAplicar={() => agenteAcao.rodar(async () => { atualizar(await api.aplicar(build.id, { proposta: true })); setProposta(null); })} />
+          <PropostaCard proposta={proposta} build={build} catalogo={catalogo} ocupado={agenteAcao.ocupado} onDescartar={() => setProposta(null)}
+            onAplicar={(perfil) => agenteAcao.rodar(async () => { atualizar(await api.aplicar(build.id, { proposta: true, perfil })); setProposta(null); })} />
         )}
       </>
     ),

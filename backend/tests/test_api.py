@@ -252,3 +252,14 @@ def test_saude_e_endpoint_consumo_expoem_cota_serper(client):
     assert saude["consumo_serper"]["restantes"] == 50
     consumo = client.get("/precos/consumo").json()
     assert consumo == saude["consumo_serper"]
+
+
+def test_aplicar_alternativa_da_proposta_pelo_perfil(client):
+    bid = criar(client, modo="agente", orcamento=7000)
+    p = client.post(f"/builds/{bid}/agente").json()
+    eco = next(a for a in p["alternativas"] if a["perfil"] == "economica")
+    assert client.post(f"/builds/{bid}/aplicar", json={"proposta": True, "perfil": "com_folga"}).status_code in (200, 404)
+    bid = criar(client, modo="agente", orcamento=7000)
+    client.post(f"/builds/{bid}/agente")
+    r = client.post(f"/builds/{bid}/aplicar", json={"proposta": True, "perfil": "economica"}).json()
+    assert {i["componente_id"] for i in r["itens"]} == {i["componente_id"] for i in eco["itens"]}

@@ -43,3 +43,28 @@ def test_conectores_e_picos(store):
     assert por(rev(store, "rx-7800xt", "psu-cx650"), "eletrico:qualidade")
     assert por(rev(store, "rx-9070xt", "r7-9800x3d", "psu-core2-750"), "eletrico:pico")
     assert not por(rev(store, "rtx-4070s", "psu-rm850e"), "eletrico:")
+
+
+def test_armazenamento_slots_m2(store):
+    a = por(rev(store, "mb-a620m-hdv", "ssd-nv3-1t", "ssd-sn770-1t"), "armazenamento:m2_slots")[0]
+    assert a.severidade == "bloqueante" and a.agente == "armazenamento"
+    assert not por(rev(store, "mb-b650m-a", "ssd-nv3-1t", "ssd-sn770-1t"), "armazenamento:m2_slots")
+    assert not por(rev(store, "mb-b650-gx-ax", "ssd-nv3-1t"), "armazenamento:")
+
+
+def test_termico_cooler_contra_pico_da_cpu(store):
+    a = por(rev(store, "i7-14700kf", "clr-ak400"), "termico:cooler_fraco")[0]
+    assert store.componentes[a.correcao_sugerida.para_id].specs["tdp_suportado"] >= 253
+    assert por(rev(store, "i5-13400f"), "termico:cooler_box")[0].correcao_sugerida.acao == "adicionar"
+    assert not por(rev(store, "r5-7600", "clr-ak400"), "termico:")
+
+
+def test_gargalo_usa_os_objetivos_da_build(store):
+    from app.modelos import Objetivos
+    par = itens("r5-5500", "rtx-4080s", "mb-b550m-vdh")
+    a = por(revisores.revisar(store, par, objetivos=Objetivos(resolucao="1080p")), "gargalo:cpu")[0]
+    nova = store.componentes[a.correcao_sugerida.para_id]
+    assert a.severidade == "atencao" and nova.specs["socket"] == "AM4" and nova.specs["indice"] > 60
+    assert not por(revisores.revisar(store, par, objetivos=Objetivos(resolucao="1440p")), "gargalo:cpu+")
+    sobra = por(rev(store, "r7-9800x3d", "rtx-3050-6g"), "gargalo:cpu_sobra")[0]
+    assert sobra.severidade == "sugestao" and store.componentes[sobra.correcao_sugerida.para_id].specs["socket"] == "AM5"

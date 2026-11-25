@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     llm_api_key: str = Field(default="", repr=False)
     llm_base_url: str = ""          # provider=openai (qualquer API compatível); openrouter já tem padrão
     llm_timeout_seconds: float = 60
+    llm_max_tokens: int = Field(default=800, ge=64)   # teto da resposta: resposta degenerada não segura a chamada até o timeout
+    llm_thinking: bool | None = None   # modelos com raciocínio alternável (Qwen3, GLM...): false desliga e acelera
 
     # Agente selecionador
     agente_max_tentativas: int = 4
